@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Kotlin + Spring Boot 기반의 개인용 로컬 여행 계획 앱을 구현한다 — 비밀번호 게이트, 구글맵 링크로 장소(소스) 등록, 지도 기반 일자별 동선(타임테이블) 구성.
+**Goal:** Kotlin + Spring Boot 기반의 개인용 로컬 여행 계획 앱을 구현한다 — 비밀번호 게이트, 구글맵 링크로 장소(소스) 등록(비고 포함), 지도 기반 일자별 동선(타임테이블) 구성과 날짜별 참고사항 기록.
 
-**Architecture:** 서버 렌더링(Thymeleaf) 위주 + 필요한 상호작용만 JSON API로 처리하는 하이브리드 구조. 세션 기반 자체 인증(스프링 시큐리티 미사용), 단일 Trip / 소스(Source) 모델, H2 파일 DB.
+**Architecture:** 서버 렌더링(Thymeleaf) 위주 + 필요한 상호작용만 JSON API로 처리하는 하이브리드 구조. 세션 기반 자체 인증(스프링 시큐리티 미사용), 단일 Trip / 소스(Source) / 날짜별 참고사항(DayNote) 모델, H2 파일 DB.
 
 **Tech Stack:** Kotlin, Spring Boot 3.3 (Web MVC, Thymeleaf, Data JPA, Validation), H2(파일 모드), spring-security-crypto(BCrypt), Gradle Kotlin DSL, JUnit5 + MockK + springmockk, Vanilla JS + Google Maps JavaScript API.
 
@@ -20,6 +20,8 @@
 - 모든 사용자 노출 텍스트(폼 라벨, 안내 메시지)는 한국어로 작성한다.
 - 타임테이블 배정/해제/순서변경은 `Source.scheduledDate` + `Source.sortOrder` 두 필드만으로 표현한다 (별도 조인 테이블 없음).
 - `POST /api/schedule/day/{date}`는 그 날짜에 대해 전달된 소스 id 배열을 authoritative하게 취급한다 — 배열에 없는 기존 배정은 자동으로 해제된다.
+- `Source.memo`, `DayNote.memo`는 완전히 자유로운 선택 입력 텍스트이며 형식/길이 검증을 하지 않는다.
+- `DayNote`는 참고사항이 실제로 있는 날짜에 대해서만 행을 가진다 — 빈 문자열 저장 시 해당 행을 삭제한다.
 - 패키지 루트는 `com.juiceplan`이다.
 
 ---
@@ -1151,7 +1153,7 @@ git commit -m "feat: add Google Maps share link resolution and parsing"
 
 ---
 
-### Task 6: Source 도메인 (엔티티, 서비스)
+### Task 6: Source 도메인 (엔티티, 서비스) — 비고(memo) 포함
 
 **Files:**
 - Create: `src/main/kotlin/com/juiceplan/source/Source.kt`
@@ -1161,7 +1163,7 @@ git commit -m "feat: add Google Maps share link resolution and parsing"
 
 **Interfaces:**
 - Consumes: 없음
-- Produces: `PlaceType` enum(`RESTAURANT`, `ATTRACTION`), `Source` 엔티티(`id, googleMapsUrl, name, latitude, longitude, placeType, durationMinutes, reservationRequired, reservationDeadline, scheduledDate, sortOrder`), `SourceRepository.findByScheduledDate(date: LocalDate): List<Source>`, `SourceInput`, `SourceService.list()/get(id)/create(input)/update(id, input)/delete(id)`
+- Produces: `PlaceType` enum(`RESTAURANT`, `ATTRACTION`), `Source` 엔티티(`id, googleMapsUrl, name, latitude, longitude, placeType, durationMinutes, reservationRequired, reservationDeadline, memo, scheduledDate, sortOrder`), `SourceRepository.findByScheduledDate(date: LocalDate): List<Source>`, `SourceInput`(memo 포함), `SourceService.list()/get(id)/create(input)/update(id, input)/delete(id)`
 
 - [ ] **Step 1: 실패하는 서비스 단위 테스트 작성**
 
@@ -1173,6 +1175,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.LocalDate
@@ -1183,7 +1186,11 @@ class SourceServiceTest {
     private val repository = mockk<SourceRepository>()
     private val service = SourceService(repository)
 
-    private fun validInput(reservationRequired: Boolean = false, deadline: LocalDate? = null) = SourceInput(
+    private fun validInput(
+        reservationRequired: Boolean = false,
+        deadline: LocalDate? = null,
+        memo: String? = null
+    ) = SourceInput(
         googleMapsUrl = "https://maps.app.goo.gl/abc",
         name = "경복궁",
         latitude = 37.5796,
@@ -1192,7 +1199,8 @@ class SourceServiceTest {
         durationHours = 1,
         durationMinutesPart = 30,
         reservationRequired = reservationRequired,
-        reservationDeadline = deadline
+        reservationDeadline = deadline,
+        memo = memo
     )
 
     @Test
@@ -1218,6 +1226,24 @@ class SourceServiceTest {
         val source = service.create(validInput(reservationRequired = true, deadline = LocalDate.of(2026, 8, 1)))
 
         assertEquals(LocalDate.of(2026, 8, 1), source.reservationDeadline)
+    }
+
+    @Test
+    fun `create persists an optional memo`() {
+        every { repository.save(any()) } answers { firstArg() }
+
+        val source = service.create(validInput(memo = "창가 자리 요청"))
+
+        assertEquals("창가 자리 요청", source.memo)
+    }
+
+    @Test
+    fun `create leaves memo null when not provided`() {
+        every { repository.save(any()) } answers { firstArg() }
+
+        val source = service.create(validInput())
+
+        assertNull(source.memo)
     }
 
     @Test
@@ -1276,6 +1302,7 @@ class Source(
     var durationMinutes: Int,
     var reservationRequired: Boolean,
     var reservationDeadline: LocalDate? = null,
+    var memo: String? = null,
 
     var scheduledDate: LocalDate? = null,
     var sortOrder: Int = 0
@@ -1310,7 +1337,8 @@ data class SourceInput(
     val durationHours: Int,
     val durationMinutesPart: Int,
     val reservationRequired: Boolean,
-    val reservationDeadline: LocalDate?
+    val reservationDeadline: LocalDate?,
+    val memo: String?
 )
 
 @Service
@@ -1331,7 +1359,8 @@ class SourceService(private val sourceRepository: SourceRepository) {
             placeType = input.placeType,
             durationMinutes = toDurationMinutes(input.durationHours, input.durationMinutesPart),
             reservationRequired = input.reservationRequired,
-            reservationDeadline = input.reservationDeadline
+            reservationDeadline = input.reservationDeadline,
+            memo = input.memo?.ifBlank { null }
         )
         return sourceRepository.save(source)
     }
@@ -1347,6 +1376,7 @@ class SourceService(private val sourceRepository: SourceRepository) {
         source.durationMinutes = toDurationMinutes(input.durationHours, input.durationMinutesPart)
         source.reservationRequired = input.reservationRequired
         source.reservationDeadline = input.reservationDeadline
+        source.memo = input.memo?.ifBlank { null }
         return sourceRepository.save(source)
     }
 
@@ -1376,12 +1406,12 @@ git add src/main/kotlin/com/juiceplan/source/Source.kt \
   src/main/kotlin/com/juiceplan/source/SourceRepository.kt \
   src/main/kotlin/com/juiceplan/source/SourceService.kt \
   src/test/kotlin/com/juiceplan/source/SourceServiceTest.kt
-git commit -m "feat: add Source entity and CRUD service with duration/reservation validation"
+git commit -m "feat: add Source entity with optional memo and CRUD service"
 ```
 
 ---
 
-### Task 7: 페이지1 — 소스 관리 웹 레이어
+### Task 7: 페이지1 — 소스 관리 웹 레이어 (비고 입력 포함)
 
 **Files:**
 - Create: `src/main/kotlin/com/juiceplan/source/SourceController.kt`
@@ -1394,7 +1424,7 @@ git commit -m "feat: add Source entity and CRUD service with duration/reservatio
 
 **Interfaces:**
 - Consumes: `SourceService`(Task 6), `TripService`(Task 4), `GoogleMapsSourceLinkService`(Task 5), `SESSION_AUTHENTICATED_KEY`(Task 3, 테스트용)
-- Produces: `SourceController`(`GET/POST /sources`, `PUT/DELETE /sources/{id}`), `SourceForm`, `SourceLinkController`(`POST /api/sources/parse-link`), 템플릿 `fragments/layout :: tabs(active)` (Task 9 페이지2에서도 재사용), `sources/index`
+- Produces: `SourceController`(`GET/POST /sources`, `PUT/DELETE /sources/{id}`), `SourceForm`(memo 포함), `SourceLinkController`(`POST /api/sources/parse-link`), 템플릿 `fragments/layout :: tabs(active)` (Task 10 페이지2에서도 재사용), `sources/index`
 
 - [ ] **Step 1: 실패하는 컨트롤러 통합 테스트 작성**
 
@@ -1447,7 +1477,7 @@ class SourceControllerIntegrationTest {
     }
 
     @Test
-    fun `creating a source persists it and redirects to sources list`() {
+    fun `creating a source persists it with memo and redirects to sources list`() {
         mockMvc.perform(
             post("/sources").session(session)
                 .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
@@ -1458,6 +1488,7 @@ class SourceControllerIntegrationTest {
                 .param("durationHours", "1")
                 .param("durationMinutesPart", "30")
                 .param("reservationRequired", "false")
+                .param("memo", "창가 자리 요청")
         )
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/sources"))
@@ -1465,6 +1496,7 @@ class SourceControllerIntegrationTest {
         val saved = sourceRepository.findAll()
         assertEquals(1, saved.size)
         assertEquals(90, saved[0].durationMinutes)
+        assertEquals("창가 자리 요청", saved[0].memo)
     }
 
     @Test
@@ -1608,7 +1640,8 @@ data class SourceForm(
     val durationHours: Int,
     val durationMinutesPart: Int,
     val reservationRequired: Boolean,
-    val reservationDeadline: LocalDate?
+    val reservationDeadline: LocalDate?,
+    val memo: String?
 ) {
     fun toInput() = SourceInput(
         googleMapsUrl = googleMapsUrl,
@@ -1619,7 +1652,8 @@ data class SourceForm(
         durationHours = durationHours,
         durationMinutesPart = durationMinutesPart,
         reservationRequired = reservationRequired,
-        reservationDeadline = reservationDeadline
+        reservationDeadline = reservationDeadline,
+        memo = memo
     )
 }
 ```
@@ -1661,7 +1695,7 @@ class SourceLinkController(private val linkService: GoogleMapsSourceLinkService)
 </html>
 ```
 
-- [ ] **Step 5: 소스 관리 페이지 템플릿 작성**
+- [ ] **Step 5: 소스 관리 페이지 템플릿 작성 (비고 입력/표시 포함)**
 
 `src/main/resources/templates/sources/index.html`:
 ```html
@@ -1723,6 +1757,8 @@ class SourceLinkController(private val linkService: GoogleMapsSourceLinkService)
             <label>예약 마감일 <input type="date" name="reservationDeadline"></label>
         </div>
 
+        <label>비고 <textarea name="memo" rows="2" placeholder="예: 창가 자리 요청, 현금만 가능"></textarea></label>
+
         <button type="submit">저장</button>
     </form>
 </section>
@@ -1735,6 +1771,7 @@ class SourceLinkController(private val linkService: GoogleMapsSourceLinkService)
             (<span th:text="${s.placeType}"></span>,
             <span th:text="${s.durationMinutes} + '분'"></span>)
             <span th:text="${s.scheduledDate != null} ? ${s.scheduledDate} : '미배정'"></span>
+            <p th:if="${s.memo != null}" th:text="${s.memo}" class="memo"></p>
             <button type="button" class="delete-btn" th:attr="data-id=${s.id}">삭제</button>
         </li>
     </ul>
@@ -1804,6 +1841,8 @@ footer nav a { flex: 1; text-align: center; padding: 12px; text-decoration: none
 footer nav a.active { font-weight: bold; color: #1a73e8; }
 #map { height: 400px; width: 100%; }
 .source-card, .timetable-item { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
+.memo { color: #666; font-size: 0.9em; white-space: pre-wrap; }
+#day-note textarea { width: 100%; }
 ```
 
 - [ ] **Step 7: 테스트 실행하여 통과 확인**
@@ -1820,7 +1859,7 @@ git add src/main/kotlin/com/juiceplan/source/SourceController.kt \
   src/main/resources/templates/sources/index.html \
   src/main/resources/static/ \
   src/test/kotlin/com/juiceplan/source/SourceControllerIntegrationTest.kt
-git commit -m "feat: add sources page with link parsing and footer tab navigation"
+git commit -m "feat: add sources page with memo field and footer tab navigation"
 ```
 
 ---
@@ -2112,7 +2151,285 @@ git commit -m "feat: add schedule assignment API with authoritative day reassign
 
 ---
 
-### Task 9: 페이지2 — 일자별 동선 컨트롤러/템플릿
+### Task 9: 날짜별 참고사항(DayNote) 도메인
+
+**Files:**
+- Create: `src/main/kotlin/com/juiceplan/daynote/DayNote.kt`
+- Create: `src/main/kotlin/com/juiceplan/daynote/DayNoteRepository.kt`
+- Create: `src/main/kotlin/com/juiceplan/daynote/DayNoteService.kt`
+- Create: `src/main/kotlin/com/juiceplan/daynote/DayNoteController.kt`
+- Test: `src/test/kotlin/com/juiceplan/daynote/DayNoteServiceTest.kt`
+- Test: `src/test/kotlin/com/juiceplan/daynote/DayNoteControllerIntegrationTest.kt`
+
+**Interfaces:**
+- Consumes: `SESSION_AUTHENTICATED_KEY`(Task 3, 테스트용)
+- Produces: `DayNote(id, date: LocalDate, memo: String)`, `DayNoteRepository.findByDate(date): DayNote?` / `findByDateBetween(start, end): List<DayNote>`, `DayNoteService.allForRange(startDate, endDate): Map<LocalDate, String>`, `DayNoteService.save(date, memo)` (빈 문자열이면 삭제), `DayNoteController`(`POST /api/day-notes/{date}`)
+
+- [ ] **Step 1: 실패하는 서비스 테스트 작성 (`@DataJpaTest`로 실제 upsert/삭제 동작 검증)**
+
+`src/test/kotlin/com/juiceplan/daynote/DayNoteServiceTest.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
+import org.springframework.context.annotation.Import
+import java.time.LocalDate
+
+@DataJpaTest
+@Import(DayNoteService::class)
+class DayNoteServiceTest {
+
+    @Autowired lateinit var dayNoteRepository: DayNoteRepository
+    @Autowired lateinit var dayNoteService: DayNoteService
+
+    @Test
+    fun `save creates a new note when none exists for the date`() {
+        val date = LocalDate.of(2026, 9, 1)
+
+        dayNoteService.save(date, "오전엔 우천 예보")
+
+        assertEquals("오전엔 우천 예보", dayNoteRepository.findByDate(date)?.memo)
+    }
+
+    @Test
+    fun `save updates the existing note instead of creating a duplicate`() {
+        val date = LocalDate.of(2026, 9, 1)
+        dayNoteService.save(date, "첫 메모")
+
+        dayNoteService.save(date, "수정된 메모")
+
+        val notes = dayNoteRepository.findByDateBetween(date, date)
+        assertEquals(1, notes.size)
+        assertEquals("수정된 메모", notes[0].memo)
+    }
+
+    @Test
+    fun `save with blank memo deletes the existing note`() {
+        val date = LocalDate.of(2026, 9, 1)
+        dayNoteService.save(date, "지울 메모")
+
+        dayNoteService.save(date, "")
+
+        assertNull(dayNoteRepository.findByDate(date))
+    }
+
+    @Test
+    fun `allForRange returns a map keyed by date for dates within range`() {
+        dayNoteService.save(LocalDate.of(2026, 9, 1), "1일차 메모")
+        dayNoteService.save(LocalDate.of(2026, 9, 3), "3일차 메모")
+        dayNoteService.save(LocalDate.of(2026, 9, 10), "범위 밖 메모")
+
+        val result = dayNoteService.allForRange(LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 5))
+
+        assertEquals(2, result.size)
+        assertEquals("1일차 메모", result[LocalDate.of(2026, 9, 1)])
+        assertEquals("3일차 메모", result[LocalDate.of(2026, 9, 3)])
+    }
+}
+```
+
+- [ ] **Step 2: 테스트 실행하여 컴파일 실패 확인**
+
+Run: `./gradlew test --tests "com.juiceplan.daynote.DayNoteServiceTest"`
+Expected: FAIL
+
+- [ ] **Step 3: 엔티티, 레포지토리, 서비스 구현**
+
+`src/main/kotlin/com/juiceplan/daynote/DayNote.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.GeneratedValue
+import jakarta.persistence.GenerationType
+import jakarta.persistence.Id
+import java.time.LocalDate
+
+@Entity
+class DayNote(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    val id: Long = 0,
+
+    @Column(unique = true)
+    var date: LocalDate,
+
+    var memo: String
+)
+```
+
+`src/main/kotlin/com/juiceplan/daynote/DayNoteRepository.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import org.springframework.data.jpa.repository.JpaRepository
+import java.time.LocalDate
+
+interface DayNoteRepository : JpaRepository<DayNote, Long> {
+    fun findByDate(date: LocalDate): DayNote?
+    fun findByDateBetween(start: LocalDate, end: LocalDate): List<DayNote>
+}
+```
+
+`src/main/kotlin/com/juiceplan/daynote/DayNoteService.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.time.LocalDate
+
+@Service
+class DayNoteService(private val dayNoteRepository: DayNoteRepository) {
+
+    fun allForRange(startDate: LocalDate, endDate: LocalDate): Map<LocalDate, String> =
+        dayNoteRepository.findByDateBetween(startDate, endDate).associate { it.date to it.memo }
+
+    @Transactional
+    fun save(date: LocalDate, memo: String) {
+        val existing = dayNoteRepository.findByDate(date)
+        if (memo.isBlank()) {
+            existing?.let { dayNoteRepository.delete(it) }
+            return
+        }
+        if (existing != null) {
+            existing.memo = memo
+        } else {
+            dayNoteRepository.save(DayNote(date = date, memo = memo))
+        }
+    }
+}
+```
+
+- [ ] **Step 4: 테스트 실행하여 통과 확인**
+
+Run: `./gradlew test --tests "com.juiceplan.daynote.DayNoteServiceTest"`
+Expected: PASS
+
+- [ ] **Step 5: 실패하는 컨트롤러 통합 테스트 작성**
+
+`src/test/kotlin/com/juiceplan/daynote/DayNoteControllerIntegrationTest.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import com.juiceplan.auth.SESSION_AUTHENTICATED_KEY
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.http.MediaType
+import org.springframework.mock.web.MockHttpSession
+import org.springframework.test.context.ActiveProfiles
+import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.LocalDate
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+class DayNoteControllerIntegrationTest {
+
+    @Autowired lateinit var mockMvc: MockMvc
+    @Autowired lateinit var dayNoteRepository: DayNoteRepository
+
+    private lateinit var session: MockHttpSession
+
+    @BeforeEach
+    fun setUp() {
+        dayNoteRepository.deleteAll()
+        session = MockHttpSession()
+        session.setAttribute(SESSION_AUTHENTICATED_KEY, true)
+    }
+
+    @Test
+    fun `saves a memo for the given date`() {
+        mockMvc.perform(
+            post("/api/day-notes/2026-09-01").session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"memo":"오전엔 우천 예보"}""")
+        ).andExpect(status().isOk)
+
+        val note = dayNoteRepository.findByDate(LocalDate.of(2026, 9, 1))
+        assertEquals("오전엔 우천 예보", note?.memo)
+    }
+
+    @Test
+    fun `saving a blank memo deletes the existing note`() {
+        dayNoteRepository.save(DayNote(date = LocalDate.of(2026, 9, 1), memo = "지울 메모"))
+
+        mockMvc.perform(
+            post("/api/day-notes/2026-09-01").session(session)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"memo":""}""")
+        ).andExpect(status().isOk)
+
+        assertNull(dayNoteRepository.findByDate(LocalDate.of(2026, 9, 1)))
+    }
+
+    @Test
+    fun `unauthenticated request is blocked`() {
+        mockMvc.perform(
+            post("/api/day-notes/2026-09-01")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"memo":"test"}""")
+        ).andExpect(status().is3xxRedirection)
+    }
+}
+```
+
+- [ ] **Step 6: 테스트 실행하여 컴파일 실패 확인**
+
+Run: `./gradlew test --tests "com.juiceplan.daynote.DayNoteControllerIntegrationTest"`
+Expected: FAIL (`DayNoteController`가 아직 없음)
+
+- [ ] **Step 7: 컨트롤러 구현**
+
+`src/main/kotlin/com/juiceplan/daynote/DayNoteController.kt`:
+```kotlin
+package com.juiceplan.daynote
+
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RestController
+import java.time.LocalDate
+
+data class DayNoteRequest(val memo: String)
+
+@RestController
+class DayNoteController(private val dayNoteService: DayNoteService) {
+
+    @PostMapping("/api/day-notes/{date}")
+    fun save(@PathVariable date: String, @RequestBody request: DayNoteRequest) {
+        dayNoteService.save(LocalDate.parse(date), request.memo)
+    }
+}
+```
+
+- [ ] **Step 8: 테스트 실행하여 통과 확인**
+
+Run: `./gradlew test --tests "com.juiceplan.daynote.*"`
+Expected: PASS
+
+- [ ] **Step 9: 커밋**
+
+```bash
+git add src/main/kotlin/com/juiceplan/daynote/ src/test/kotlin/com/juiceplan/daynote/
+git commit -m "feat: add DayNote domain for per-date trip notes"
+```
+
+---
+
+### Task 10: 페이지2 — 일자별 동선 컨트롤러/템플릿 (날짜별 참고사항 임베드)
 
 **Files:**
 - Create: `src/main/kotlin/com/juiceplan/plan/PlanController.kt`
@@ -2120,8 +2437,8 @@ git commit -m "feat: add schedule assignment API with authoritative day reassign
 - Test: `src/test/kotlin/com/juiceplan/plan/PlanControllerIntegrationTest.kt`
 
 **Interfaces:**
-- Consumes: `SourceService`(Task 6), `TripService`(Task 4), `fragments/layout :: tabs(active)`(Task 7)
-- Produces: `PlanController`(`GET /plan`), `plan/index` 템플릿 — `#plan-app` 엘리먼트(`data-trip-start`, `data-trip-end` 속성), 임베드된 JS 배열 `SOURCES` (Task 10에서 소비)
+- Consumes: `SourceService`(Task 6), `TripService`(Task 4), `DayNoteService`(Task 9), `fragments/layout :: tabs(active)`(Task 7)
+- Produces: `PlanController`(`GET /plan`), `plan/index` 템플릿 — `#plan-app` 엘리먼트(`data-trip-start`, `data-trip-end` 속성), 임베드된 JS 전역 `SOURCES` 배열과 `DAY_NOTES` 객체(`{"2026-09-01":"메모", ...}`, Task 11에서 소비)
 
 - [ ] **Step 1: 실패하는 컨트롤러 통합 테스트 작성**
 
@@ -2130,6 +2447,8 @@ git commit -m "feat: add schedule assignment API with authoritative day reassign
 package com.juiceplan.plan
 
 import com.juiceplan.auth.SESSION_AUTHENTICATED_KEY
+import com.juiceplan.daynote.DayNoteRepository
+import com.juiceplan.daynote.DayNote
 import com.juiceplan.trip.Trip
 import com.juiceplan.trip.TripRepository
 import org.hamcrest.Matchers.containsString
@@ -2153,12 +2472,14 @@ class PlanControllerIntegrationTest {
 
     @Autowired lateinit var mockMvc: MockMvc
     @Autowired lateinit var tripRepository: TripRepository
+    @Autowired lateinit var dayNoteRepository: DayNoteRepository
 
     private lateinit var session: MockHttpSession
 
     @BeforeEach
     fun setUp() {
         tripRepository.deleteAll()
+        dayNoteRepository.deleteAll()
         session = MockHttpSession()
         session.setAttribute(SESSION_AUTHENTICATED_KEY, true)
     }
@@ -2171,12 +2492,14 @@ class PlanControllerIntegrationTest {
     }
 
     @Test
-    fun `renders plan page with embedded sources when trip exists`() {
+    fun `renders plan page with embedded sources and day notes when trip exists`() {
         tripRepository.save(Trip(startDate = LocalDate.of(2026, 9, 1), endDate = LocalDate.of(2026, 9, 5)))
+        dayNoteRepository.save(DayNote(date = LocalDate.of(2026, 9, 1), memo = "오전엔 우천 예보"))
 
         mockMvc.perform(get("/plan").session(session))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("plan-app")))
+            .andExpect(content().string(containsString("오전엔 우천 예보")))
     }
 
     @Test
@@ -2198,6 +2521,7 @@ Expected: FAIL (`PlanController`가 아직 없음)
 ```kotlin
 package com.juiceplan.plan
 
+import com.juiceplan.daynote.DayNoteService
 import com.juiceplan.source.SourceService
 import com.juiceplan.trip.TripService
 import org.springframework.stereotype.Controller
@@ -2207,7 +2531,8 @@ import org.springframework.web.bind.annotation.GetMapping
 @Controller
 class PlanController(
     private val sourceService: SourceService,
-    private val tripService: TripService
+    private val tripService: TripService,
+    private val dayNoteService: DayNoteService
 ) {
     @GetMapping("/plan")
     fun index(model: Model): String {
@@ -2218,12 +2543,13 @@ class PlanController(
         }
         model.addAttribute("trip", trip)
         model.addAttribute("sources", sourceService.list())
+        model.addAttribute("dayNotes", dayNoteService.allForRange(trip.startDate, trip.endDate))
         return "plan/index"
     }
 }
 ```
 
-- [ ] **Step 4: 템플릿 작성**
+- [ ] **Step 4: 템플릿 작성 (날짜별 참고사항 영역 포함)**
 
 `src/main/resources/templates/plan/index.html`:
 ```html
@@ -2243,6 +2569,10 @@ class PlanController(
 <div th:unless="${tripMissing}" id="plan-app"
      th:attr="data-trip-start=${trip.startDate}, data-trip-end=${trip.endDate}">
     <div id="date-tabs"></div>
+    <div id="day-note">
+        <textarea id="day-note-text" rows="2" placeholder="이 날짜의 참고사항을 입력하세요"></textarea>
+        <button type="button" id="day-note-save">참고사항 저장</button>
+    </div>
     <div id="available-list"></div>
     <div id="map"></div>
     <div id="timetable"></div>
@@ -2250,6 +2580,7 @@ class PlanController(
     <script th:inline="javascript">
         /*<![CDATA[*/
         var SOURCES = /*[[${sources}]]*/ [];
+        var DAY_NOTES = /*[[${dayNotes}]]*/ {};
         /*]]>*/
     </script>
 </div>
@@ -2274,19 +2605,19 @@ Expected: PASS
 ```bash
 git add src/main/kotlin/com/juiceplan/plan/ src/main/resources/templates/plan/ \
   src/test/kotlin/com/juiceplan/plan/
-git commit -m "feat: add plan page controller with embedded sources JSON"
+git commit -m "feat: add plan page controller with embedded sources and day notes"
 ```
 
 ---
 
-### Task 10: 페이지2 — 지도/목록/타임테이블 JS 상호작용
+### Task 11: 페이지2 — 지도/목록/타임테이블/참고사항 JS 상호작용
 
 **Files:**
 - Create: `src/main/resources/static/js/plan.js`
 
 **Interfaces:**
-- Consumes: `plan/index.html`의 `#plan-app`(`data-trip-start`, `data-trip-end`), 전역 `SOURCES` 배열(Task 9), `POST /api/schedule/day/{date}` / `DELETE /api/schedule/{sourceId}`(Task 8)
-- Produces: 지도 초기화(`window.initMap`), 뷰포트 필터링, 클릭 강조, 드래그앤드롭 배정/해제
+- Consumes: `plan/index.html`의 `#plan-app`(`data-trip-start`, `data-trip-end`), 전역 `SOURCES` 배열과 `DAY_NOTES` 객체(Task 10), `POST /api/schedule/day/{date}` / `DELETE /api/schedule/{sourceId}`(Task 8), `POST /api/day-notes/{date}`(Task 9)
+- Produces: 지도 초기화(`window.initMap`), 뷰포트 필터링, 클릭 강조, 드래그앤드롭 배정/해제, 날짜별 참고사항 편집/저장
 
 이 작업은 브라우저 상호작용(지도, 드래그앤드롭)이 핵심이라 스펙에 명시된 대로 자동화 테스트 대상이 아니며, 실제 브라우저로 수동 검증한다.
 
@@ -2319,9 +2650,35 @@ git commit -m "feat: add plan page controller with embedded sources JSON"
                 selectedDate = date;
                 renderDateTabs();
                 renderTimetable();
+                renderDayNote();
             });
             container.appendChild(btn);
         });
+    }
+
+    function renderDayNote() {
+        const textarea = document.getElementById('day-note-text');
+        textarea.value = DAY_NOTES[selectedDate] || '';
+    }
+
+    async function saveDayNote() {
+        const textarea = document.getElementById('day-note-text');
+        const memo = textarea.value;
+        try {
+            const res = await fetch(`/api/day-notes/${selectedDate}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memo }),
+            });
+            if (!res.ok) throw new Error('요청 실패');
+            if (memo.trim() === '') {
+                delete DAY_NOTES[selectedDate];
+            } else {
+                DAY_NOTES[selectedDate] = memo;
+            }
+        } catch (e) {
+            alert('저장 실패, 다시 시도해주세요.');
+        }
     }
 
     function availableSources() {
@@ -2485,7 +2842,10 @@ git commit -m "feat: add plan page controller with embedded sources JSON"
 
     window.initMap = initMap;
 
+    document.getElementById('day-note-save').addEventListener('click', saveDayNote);
+
     renderDateTabs();
+    renderDayNote();
     renderAvailableList();
     renderTimetable();
 })();
@@ -2497,26 +2857,29 @@ Run: `GOOGLE_MAPS_API_KEY=<발급받은 키> ./gradlew bootRun`
 
 브라우저에서 `http://localhost:8080` 접속 후 다음을 확인한다:
 1. 최초 비밀번호(`250707`)를 설정하고 `/sources`로 자동 이동하는지 확인.
-2. `/sources`에서 여행 기간을 설정하고, 구글맵 공유 링크로 소스를 2~3개 등록한 뒤(또는 파싱 실패 시 수동으로 이름/좌표 입력) 목록에 나타나는지 확인.
+2. `/sources`에서 여행 기간을 설정하고, 구글맵 공유 링크로 소스를 2~3개 등록(비고도 하나 입력)한 뒤(또는 파싱 실패 시 수동으로 이름/좌표 입력) 목록에 비고까지 나타나는지 확인.
 3. 풋터 탭으로 `/plan`으로 이동 — 지도에 등록한 소스들의 마커가 표시되는지 확인.
 4. 가용 목록의 항목을 클릭하면 지도가 해당 위치로 이동하고 마커가 바운스되는지 확인.
 5. 지도를 이동/축소해서 뷰포트 밖 소스가 가용 목록에서 사라지는지 확인.
 6. 소스를 타임테이블로 드래그해서 추가한 뒤 페이지를 새로고침해도 유지되는지 확인.
 7. 타임테이블 항목의 "X" 버튼으로 제거하면 다시 가용 목록에 나타나는지 확인.
 8. 날짜 탭을 전환하면 해당 날짜의 타임테이블만 보이는지 확인.
+9. 날짜별 참고사항 textarea에 메모를 입력하고 저장한 뒤, 다른 날짜 탭으로 갔다가 다시 돌아와도 메모가 유지되는지, 페이지를 새로고침해도 유지되는지 확인.
+10. 참고사항을 지우고 저장하면 빈 상태로 남는지(재방문 시에도 빈 상태) 확인.
 
 - [ ] **Step 3: 커밋**
 
 ```bash
 git add src/main/resources/static/js/plan.js
-git commit -m "feat: add map, viewport filtering, and drag-and-drop timetable interactions"
+git commit -m "feat: add map, viewport filtering, drag-and-drop, and day note editing"
 ```
 
 ---
 
 ## Self-Review 완료 사항
 
-- **스펙 커버리지**: 인증(Task 2-3), Trip(Task 4), 구글맵 링크 파싱(Task 5), 소스 CRUD(Task 6-7), 풋터 탭(Task 7), 스케줄 배정/해제(Task 8), 페이지2 렌더링(Task 9), 지도/뷰포트/드래그앤드롭(Task 10) 모두 매핑됨.
+- **스펙 커버리지**: 인증(Task 2-3), Trip(Task 4), 구글맵 링크 파싱(Task 5), 소스 CRUD 및 비고(Task 6-7), 풋터 탭(Task 7), 스케줄 배정/해제(Task 8), 날짜별 참고사항 도메인(Task 9), 페이지2 렌더링(Task 10), 지도/뷰포트/드래그앤드롭/참고사항 편집(Task 11) 모두 매핑됨.
 - **플레이스홀더 스캔**: TBD/TODO 없음, 모든 스텝에 실제 코드 포함.
-- **타입 일관성**: `Source`의 필드명(`scheduledDate`, `sortOrder`, `placeType` 등)이 서비스·컨트롤러·JS 전반에서 동일하게 사용됨을 확인. `SESSION_AUTHENTICATED_KEY`는 Task 3에서 한 번만 정의되고 이후 모든 통합 테스트에서 동일하게 참조됨.
-- **인터셉터 테스트 순서 문제 해결**: Task 3에서는 아직 `/sources`, `/plan` 컨트롤러가 없으므로 `AuthInterceptor`를 순수 단위 테스트로 검증하고, 실제 엔드포인트를 통한 리다이렉트 확인은 각 컨트롤러가 생긴 Task 4, 7, 8, 9에서 수행하도록 배치함.
+- **타입 일관성**: `Source`의 필드명(`scheduledDate`, `sortOrder`, `placeType`, `memo` 등)이 서비스·컨트롤러·JS 전반에서 동일하게 사용됨을 확인. `DayNote`/`DAY_NOTES` 키가 `LocalDate`의 ISO 문자열(`YYYY-MM-DD`)로 서버·클라이언트 양쪽에서 일관됨. `SESSION_AUTHENTICATED_KEY`는 Task 3에서 한 번만 정의되고 이후 모든 통합 테스트에서 동일하게 참조됨.
+- **인터셉터 테스트 순서 문제 해결**: Task 3에서는 아직 `/sources`, `/plan` 컨트롤러가 없으므로 `AuthInterceptor`를 순수 단위 테스트로 검증하고, 실제 엔드포인트를 통한 리다이렉트 확인은 각 컨트롤러가 생긴 Task 4, 7, 8, 9, 10에서 수행하도록 배치함.
+- **비고/참고사항 추가 반영**: `Source.memo`(Task 6-7)와 `DayNote`(신규 Task 9, PlanController/plan.js에 Task 10-11에서 연동)로 두 요구사항을 모두 커버함. 둘 다 완전한 자유 입력이며 별도 검증 규칙이 없음을 Global Constraints에 명시.

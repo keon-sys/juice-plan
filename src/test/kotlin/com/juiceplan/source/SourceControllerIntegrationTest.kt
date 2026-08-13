@@ -68,6 +68,26 @@ class SourceControllerIntegrationTest {
     }
 
     @Test
+    fun `creating a source without reservationRequired param defaults to false like an unchecked checkbox`() {
+        mockMvc.perform(
+            post("/sources").session(session)
+                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
+                .param("name", "경복궁")
+                .param("latitude", "37.5796")
+                .param("longitude", "126.9770")
+                .param("placeType", "ATTRACTION")
+                .param("durationHours", "1")
+                .param("durationMinutesPart", "30")
+        )
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/sources"))
+
+        val saved = sourceRepository.findAll()
+        assertEquals(1, saved.size)
+        assertEquals(false, saved[0].reservationRequired)
+    }
+
+    @Test
     fun `deleting a source removes it`() {
         val source = sourceRepository.save(
             Source(

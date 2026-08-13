@@ -53,7 +53,7 @@ data class SourceForm(
     val placeType: PlaceType,
     val durationHours: Int,
     val durationMinutesPart: Int,
-    val reservationRequired: Boolean,
+    val reservationRequired: Boolean = false,
     val reservationDeadline: LocalDate?,
     val memo: String?
 ) {

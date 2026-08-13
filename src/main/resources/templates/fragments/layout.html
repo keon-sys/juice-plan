@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<footer th:fragment="tabs(active)">
+    <nav>
+        <a href="/sources" th:classappend="${active == 'sources'} ? 'active' : ''">소스 관리</a>
+        <a href="/plan" th:classappend="${active == 'plan'} ? 'active' : ''">일자별 동선</a>
+    </nav>
+</footer>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>소스 관리</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<h1>소스 관리</h1>
+
+<section id="trip-widget">
+    <div th:if="${trip == null}">
+        <form method="post" th:action="@{/trip}">
+            <label>시작일 <input type="date" name="startDate" required></label>
+            <label>종료일 <input type="date" name="endDate" required></label>
+            <button type="submit">여행 기간 설정</button>
+        </form>
+    </div>
+    <div th:if="${trip != null}">
+        <span th:text="'여행 기간: ' + ${trip.startDate} + ' ~ ' + ${trip.endDate}"></span>
+        <a href="#" onclick="document.getElementById('trip-edit').style.display='block'; return false;">수정</a>
+        <form id="trip-edit" method="post" th:action="@{/trip}" style="display:none;">
+            <input type="date" name="startDate" th:value="${trip.startDate}" required>
+            <input type="date" name="endDate" th:value="${trip.endDate}" required>
+            <button type="submit">저장</button>
+        </form>
+    </div>
+</section>
+
+<section id="source-form">
+    <h2>새 소스 추가</h2>
+    <form method="post" th:action="@{/sources}" id="sourceForm">
+        <label>구글맵 공유 링크
+            <input type="text" id="googleMapsUrl" name="googleMapsUrl" required>
+            <button type="button" id="parseLinkBtn">가져오기</button>
+        </label>
+        <p id="parseError" style="color:red; display:none;"></p>
+
+        <label>이름 <input type="text" id="name" name="name" required></label>
+        <label>위도 <input type="number" step="any" id="latitude" name="latitude" required></label>
+        <label>경도 <input type="number" step="any" id="longitude" name="longitude" required></label>
+
+        <fieldset>
+            <legend>장소 종류</legend>
+            <label><input type="radio" name="placeType" value="RESTAURANT" required> 음식점</label>
+            <label><input type="radio" name="placeType" value="ATTRACTION"> 관광지</label>
+        </fieldset>
+
+        <label>예상 소요 시간
+            <input type="number" min="0" name="durationHours" value="0"> 시간
+            <input type="number" min="0" max="59" name="durationMinutesPart" value="0"> 분
+        </label>
+
+        <label><input type="checkbox" id="reservationRequired" name="reservationRequired" value="true"> 예약 필요</label>
+        <div id="reservationDeadlineWrap" style="display:none;">
+            <label>예약 마감일 <input type="date" name="reservationDeadline"></label>
+        </div>
+
+        <label>비고 <textarea name="memo" rows="2" placeholder="예: 창가 자리 요청, 현금만 가능"></textarea></label>
+
+        <button type="submit">저장</button>
+    </form>
+</section>
+
+<section id="source-list">
+    <h2>등록된 소스</h2>
+    <ul>
+        <li th:each="s : ${sources}">
+            <span th:text="${s.name}"></span>
+            (<span th:text="${s.placeType}"></span>,
+            <span th:text="${s.durationMinutes} + '분'"></span>)
+            <span th:text="${s.scheduledDate != null} ? ${s.scheduledDate} : '미배정'"></span>
+            <p th:if="${s.memo != null}" th:text="${s.memo}" class="memo"></p>
+            <button type="button" class="delete-btn" th:attr="data-id=${s.id}">삭제</button>
+        </li>
+    </ul>
+</section>
+
+<div th:replace="~{fragments/layout :: tabs('sources')}"></div>
+
+<script th:src="@{/js/sources.js}"></script>
+</body>
+</html>

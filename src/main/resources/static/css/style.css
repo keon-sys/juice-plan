@@ -1,0 +1,9 @@
+body { font-family: sans-serif; padding-bottom: 60px; }
+footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; }
+footer nav { display: flex; }
+footer nav a { flex: 1; text-align: center; padding: 12px; text-decoration: none; color: #333; }
+footer nav a.active { font-weight: bold; color: #1a73e8; }
+#map { height: 400px; width: 100%; }
+.source-card, .timetable-item { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
+.memo { color: #666; font-size: 0.9em; white-space: pre-wrap; }
+#day-note textarea { width: 100%; }

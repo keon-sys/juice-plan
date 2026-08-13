@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>일자별 동선</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div th:if="${tripMissing}">
+    <p>먼저 여행 기간을 설정해주세요.</p>
+    <a href="/sources">소스 관리로 이동</a>
+</div>
+
+<div th:unless="${tripMissing}" id="plan-app"
+     th:attr="data-trip-start=${trip.startDate}, data-trip-end=${trip.endDate}">
+    <div id="date-tabs"></div>
+    <div id="day-note">
+        <textarea id="day-note-text" rows="2" placeholder="이 날짜의 참고사항을 입력하세요"></textarea>
+        <button type="button" id="day-note-save">참고사항 저장</button>
+    </div>
+    <div id="available-list"></div>
+    <div id="map"></div>
+    <div id="timetable"></div>
+
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        var SOURCES = /*[[${sources}]]*/ [];
+        var DAY_NOTES = /*[[${dayNotes}]]*/ {};
+        /*]]>*/
+    </script>
+</div>
+
+<div th:replace="~{fragments/layout :: tabs('plan')}"></div>
+
+<script th:if="${!tripMissing}" th:src="@{/js/plan.js}"></script>
+<script th:if="${!tripMissing}"
+        th:src="'https://maps.googleapis.com/maps/api/js?key=' + ${@environment.getProperty('app.google-maps-api-key')} + '&callback=initMap'"
+        async defer></script>
+</body>
+</html>

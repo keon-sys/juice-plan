@@ -9,6 +9,16 @@ plugins {
 group = "com.juiceplan"
 version = "0.0.1-SNAPSHOT"
 
+// This sandboxed Linux environment's Gradle daemon needs the legacy VFORK process-launch
+// mechanism for its own JVM to successfully fork test-worker processes; VFORK is not a
+// supported launch mechanism on macOS/BSD JDKs, so this must not apply there. It must be set
+// as a JVM system property on the process doing the forking (the Gradle daemon/build JVM
+// itself, not the forked test-worker JVM), and early enough (build-script configuration time)
+// to run before that JVM's `java.lang.ProcessImpl` class is first loaded/initialized.
+if (System.getProperty("os.name").lowercase().contains("linux")) {
+    System.setProperty("jdk.lang.Process.launchMechanism", "VFORK")
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17

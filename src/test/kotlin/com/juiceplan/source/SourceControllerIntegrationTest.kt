@@ -18,11 +18,14 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.io.IOException
+import java.time.LocalDate
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -159,5 +162,73 @@ class SourceControllerIntegrationTest {
         mockMvc.perform(get("/sources"))
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/"))
+    }
+
+    @Test
+    fun `unauthenticated parse-link api call is blocked with 401, not a redirect`() {
+        mockMvc.perform(
+            post("/api/sources/parse-link")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"url":"https://maps.app.goo.gl/abc"}""")
+        ).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `creating a source with reservationRequired but no deadline redirects back with a flash error instead of 500`() {
+        mockMvc.perform(
+            post("/sources").session(session)
+                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
+                .param("name", "경복궁")
+                .param("latitude", "37.5796")
+                .param("longitude", "126.9770")
+                .param("placeType", "ATTRACTION")
+                .param("durationHours", "1")
+                .param("durationMinutesPart", "30")
+                .param("reservationRequired", "true")
+                .param("memo", "")
+        )
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/sources"))
+            .andExpect(flash().attributeExists("error"))
+
+        assertTrue(sourceRepository.findAll().isEmpty())
+    }
+
+    @Test
+    fun `updating a source persists the changes via PUT`() {
+        val source = sourceRepository.save(
+            Source(
+                googleMapsUrl = "https://maps.app.goo.gl/abc",
+                name = "경복궁",
+                latitude = 37.5796,
+                longitude = 126.9770,
+                placeType = PlaceType.ATTRACTION,
+                durationMinutes = 90,
+                reservationRequired = false
+            )
+        )
+
+        mockMvc.perform(
+            put("/sources/${source.id}").session(session)
+                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
+                .param("name", "경복궁 야간개장")
+                .param("latitude", "37.58")
+                .param("longitude", "126.98")
+                .param("placeType", "ATTRACTION")
+                .param("durationHours", "2")
+                .param("durationMinutesPart", "0")
+                .param("reservationRequired", "true")
+                .param("reservationDeadline", "2026-09-01")
+                .param("memo", "야간개장 예약 필요")
+        )
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/sources"))
+
+        val updated = sourceRepository.findById(source.id).get()
+        assertEquals("경복궁 야간개장", updated.name)
+        assertEquals(120, updated.durationMinutes)
+        assertEquals(true, updated.reservationRequired)
+        assertEquals(LocalDate.of(2026, 9, 1), updated.reservationDeadline)
+        assertEquals("야간개장 예약 필요", updated.memo)
     }
 }

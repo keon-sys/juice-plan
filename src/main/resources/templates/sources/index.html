@@ -8,6 +8,8 @@
 <body>
 <h1>소스 관리</h1>
 
+<p th:if="${error}" th:text="${error}" style="color:red;"></p>
+
 <section id="trip-widget">
     <div th:if="${trip == null}">
         <form method="post" th:action="@{/trip}">
@@ -67,10 +69,25 @@
     <ul>
         <li th:each="s : ${sources}">
             <span th:text="${s.name}"></span>
-            (<span th:text="${s.placeType}"></span>,
+            (<span th:text="${s.placeType.name() == 'RESTAURANT'} ? '음식점' : '관광지'"></span>,
             <span th:text="${s.durationMinutes} + '분'"></span>)
             <span th:text="${s.scheduledDate != null} ? ${s.scheduledDate} : '미배정'"></span>
+            <span th:if="${s.reservationRequired}"
+                  th:text="'예약 필요 (마감일: ' + ${s.reservationDeadline} + ')'"></span>
+            <span th:unless="${s.reservationRequired}">예약 불필요</span>
             <p th:if="${s.memo != null}" th:text="${s.memo}" class="memo"></p>
+            <button type="button" class="edit-btn"
+                    th:attr="data-id=${s.id},
+                             data-google-maps-url=${s.googleMapsUrl},
+                             data-name=${s.name},
+                             data-latitude=${s.latitude},
+                             data-longitude=${s.longitude},
+                             data-place-type=${s.placeType},
+                             data-duration-hours=${s.durationMinutes / 60},
+                             data-duration-minutes-part=${s.durationMinutes % 60},
+                             data-reservation-required=${s.reservationRequired},
+                             data-reservation-deadline=${s.reservationDeadline},
+                             data-memo=${s.memo}">수정</button>
             <button type="button" class="delete-btn" th:attr="data-id=${s.id}">삭제</button>
         </li>
     </ul>

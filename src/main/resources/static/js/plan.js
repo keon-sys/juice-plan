@@ -12,6 +12,15 @@
     let map;
     const markers = {};
 
+    function isUnauthorized(res) {
+        if (res.status === 401) {
+            alert('세션이 만료되었습니다. 다시 로그인해주세요.');
+            window.location.href = '/';
+            return true;
+        }
+        return false;
+    }
+
     function renderDateTabs() {
         const container = document.getElementById('date-tabs');
         container.innerHTML = '';
@@ -43,6 +52,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ memo }),
             });
+            if (isUnauthorized(res)) return;
             if (!res.ok) throw new Error('요청 실패');
             if (memo.trim() === '') {
                 delete DAY_NOTES[selectedDate];
@@ -122,15 +132,39 @@
         }
     }
 
-    async function addToSchedule(sourceId) {
-        const currentIds = timetableSources().map((s) => s.id);
-        if (currentIds.includes(sourceId)) return;
-        await saveDay([...currentIds, sourceId]);
+    // Computes the index (into the timetable's ordered-id array, dragged item excluded)
+    // that a drop at `clientY` should be inserted at, based on the vertical midpoint of
+    // each currently-rendered timetable item. Falls back to "append to end" (returns the
+    // item count) when the drop lands below every item, or into an empty timetable.
+    function computeDropIndex(container, clientY, draggedId) {
+        const items = Array.from(container.querySelectorAll('.timetable-item'))
+            .filter((el) => Number(el.dataset.id) !== draggedId);
+        for (let i = 0; i < items.length; i++) {
+            const rect = items[i].getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (clientY < midpoint) {
+                return i;
+            }
+        }
+        return items.length;
+    }
+
+    // Inserts (or moves) `sourceId` into the current day's ordered id array at `index` and
+    // persists the full array. Works uniformly whether `sourceId` is already scheduled on
+    // this day (a true reorder) or is coming from the available pool / another day (an
+    // insert-at-position add) — either way the dragged id is removed first, then spliced
+    // back in at the target position.
+    async function insertIntoDayAt(sourceId, index) {
+        const currentIds = timetableSources().map((s) => s.id).filter((id) => id !== sourceId);
+        const clampedIndex = Math.max(0, Math.min(index, currentIds.length));
+        currentIds.splice(clampedIndex, 0, sourceId);
+        await saveDay(currentIds);
     }
 
     async function removeFromSchedule(sourceId) {
         try {
             const res = await fetch(`/api/schedule/${sourceId}`, { method: 'DELETE' });
+            if (isUnauthorized(res)) return;
             if (!res.ok) throw new Error('요청 실패');
             const source = SOURCES.find((s) => s.id === sourceId);
             source.scheduledDate = null;
@@ -149,6 +183,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ sourceIds: orderedIds }),
             });
+            if (isUnauthorized(res)) return;
             if (!res.ok) throw new Error('요청 실패');
 
             orderedIds.forEach((id, index) => {
@@ -216,7 +251,8 @@
     timetableEl.addEventListener('drop', (e) => {
         e.preventDefault();
         const id = Number(e.dataTransfer.getData('text/plain'));
-        addToSchedule(id);
+        const dropIndex = computeDropIndex(timetableEl, e.clientY, id);
+        insertIntoDayAt(id, dropIndex);
     });
 
     renderDateTabs();

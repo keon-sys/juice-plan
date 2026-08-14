@@ -77,13 +77,6 @@
             });
             list.appendChild(item);
         });
-
-        list.addEventListener('dragover', (e) => e.preventDefault());
-        list.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const id = Number(e.dataTransfer.getData('text/plain'));
-            removeFromSchedule(id);
-        });
     }
 
     function timetableSources() {
@@ -116,13 +109,6 @@
             });
 
             container.appendChild(item);
-        });
-
-        container.addEventListener('dragover', (e) => e.preventDefault());
-        container.addEventListener('drop', (e) => {
-            e.preventDefault();
-            const id = Number(e.dataTransfer.getData('text/plain'));
-            addToSchedule(id);
         });
     }
 
@@ -216,6 +202,22 @@
     window.initMap = initMap;
 
     document.getElementById('day-note-save').addEventListener('click', saveDayNote);
+
+    const availableListEl = document.getElementById('available-list');
+    availableListEl.addEventListener('dragover', (e) => e.preventDefault());
+    availableListEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const id = Number(e.dataTransfer.getData('text/plain'));
+        removeFromSchedule(id);
+    });
+
+    const timetableEl = document.getElementById('timetable');
+    timetableEl.addEventListener('dragover', (e) => e.preventDefault());
+    timetableEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const id = Number(e.dataTransfer.getData('text/plain'));
+        addToSchedule(id);
+    });
 
     renderDateTabs();
     renderDayNote();

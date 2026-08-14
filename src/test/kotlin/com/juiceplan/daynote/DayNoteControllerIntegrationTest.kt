@@ -59,11 +59,11 @@ class DayNoteControllerIntegrationTest {
     }
 
     @Test
-    fun `unauthenticated request is blocked`() {
+    fun `unauthenticated request is blocked with 401, not a redirect`() {
         mockMvc.perform(
             post("/api/day-notes/2026-09-01")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"memo":"test"}""")
-        ).andExpect(status().is3xxRedirection)
+        ).andExpect(status().isUnauthorized)
     }
 }

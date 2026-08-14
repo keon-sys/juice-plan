@@ -77,11 +77,11 @@ class ScheduleControllerIntegrationTest {
     }
 
     @Test
-    fun `unauthenticated request is blocked`() {
+    fun `unauthenticated request is blocked with 401, not a redirect`() {
         mockMvc.perform(
             post("/api/schedule/day/2026-09-01")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"sourceIds":[]}""")
-        ).andExpect(status().is3xxRedirection)
+        ).andExpect(status().isUnauthorized)
     }
 }

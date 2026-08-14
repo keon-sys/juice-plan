@@ -12,7 +12,11 @@ class AuthInterceptor : HandlerInterceptor {
     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
         val authenticated = request.session.getAttribute(SESSION_AUTHENTICATED_KEY) == true
         if (!authenticated) {
-            response.sendRedirect("/")
+            if (request.requestURI.startsWith("/api/")) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED)
+            } else {
+                response.sendRedirect("/")
+            }
             return false
         }
         return true

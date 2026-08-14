@@ -15,17 +15,34 @@ class AuthInterceptorTest {
     private val interceptor = AuthInterceptor()
 
     @Test
-    fun `blocks and redirects when session not authenticated`() {
+    fun `blocks and redirects when session not authenticated for a page request`() {
         val session = mockk<HttpSession>()
         every { session.getAttribute(SESSION_AUTHENTICATED_KEY) } returns null
         val request = mockk<HttpServletRequest>()
         every { request.session } returns session
+        every { request.requestURI } returns "/sources"
         val response = mockk<HttpServletResponse>(relaxed = true)
 
         val result = interceptor.preHandle(request, response, Any())
 
         assertFalse(result)
         verify { response.sendRedirect("/") }
+    }
+
+    @Test
+    fun `blocks with 401 instead of redirecting when session not authenticated for an api request`() {
+        val session = mockk<HttpSession>()
+        every { session.getAttribute(SESSION_AUTHENTICATED_KEY) } returns null
+        val request = mockk<HttpServletRequest>()
+        every { request.session } returns session
+        every { request.requestURI } returns "/api/schedule/day/2026-09-01"
+        val response = mockk<HttpServletResponse>(relaxed = true)
+
+        val result = interceptor.preHandle(request, response, Any())
+
+        assertFalse(result)
+        verify { response.sendError(HttpServletResponse.SC_UNAUTHORIZED) }
+        verify(inverse = true) { response.sendRedirect(any()) }
     }
 
     @Test

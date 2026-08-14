@@ -53,7 +53,14 @@ class PlanControllerIntegrationTest {
         mockMvc.perform(get("/plan").session(session))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("plan-app")))
-            .andExpect(content().string(containsString("오전엔 우천 예보")))
+            .andExpect(content().string(containsString("var DAY_NOTES")))
+            // Thymeleaf's default th:inline="javascript" serializer safely unicode-escapes
+            // non-ASCII characters inside inline <script> blocks (part of its script-context
+            // escaping defenses), so the memo appears as \uXXXX sequences rather than raw
+            // Korean text. This asserts the exact escaped form Jackson produces for
+            // "오전엔 우천 예보", proving the day note's actual content round-tripped into the
+            // page (not an empty/placeholder DAY_NOTES) without weakening that escaping.
+            .andExpect(content().string(containsString("\\uC624\\uC804\\uC5D4 \\uC6B0\\uCC9C \\uC608\\uBCF4")))
     }
 
     @Test

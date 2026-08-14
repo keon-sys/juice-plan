@@ -10,12 +10,12 @@ class GoogleMapsSourceLinkService(
     private val linkParser: GoogleMapsLinkParser
 ) {
     fun parseLink(shortUrl: String): LinkParseResult {
-        val resolved = try {
-            urlResolver.resolve(shortUrl)
+        val place = try {
+            val resolved = urlResolver.resolve(shortUrl)
+            linkParser.parse(resolved)
         } catch (ex: Exception) {
             return LinkParseResult(success = false)
-        }
-        val place = linkParser.parse(resolved) ?: return LinkParseResult(success = false)
+        } ?: return LinkParseResult(success = false)
         return LinkParseResult(success = true, place = place)
     }
 }

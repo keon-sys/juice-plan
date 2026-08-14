@@ -42,4 +42,14 @@ class GoogleMapsSourceLinkServiceTest {
 
         assertFalse(result.success)
     }
+
+    @Test
+    fun `returns failure instead of propagating when the parser throws on a malformed percent escape`() {
+        every { resolver.resolve(any()) } returns
+            "https://www.google.com/maps/place/Bad%ZZName/@37.5796,126.9770,17z/"
+
+        val result = service.parseLink("https://maps.app.goo.gl/bad-escape")
+
+        assertFalse(result.success)
+    }
 }

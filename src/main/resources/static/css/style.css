@@ -1,9 +1,245 @@
-body { font-family: sans-serif; padding-bottom: 60px; }
-footer { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #ddd; }
+/* ============================================================
+   디자인 토큰
+   컴포넌트 CSS는 색/간격/모서리를 여기 정의된 변수로만 참조한다.
+   다크모드는 이 변수 값만 바꾸고 레이아웃 규칙은 건드리지 않는다.
+   ============================================================ */
+:root {
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --primary: #4F6BED;
+  --food: #FF7A59;
+  --attraction: #2BB0A0;
+  --text: #1B1F27;
+  --muted: #6B7280;
+  --border: #E5E7EB;
+  --danger: #DC2626;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --slot-h: 28px;        /* 타임테이블 30분 슬롯 높이 — timegrid.js의 SLOT_H와 같아야 한다 */
+  --tabbar-h: 56px;
+  --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
+  --on-accent: #FFFFFF;  /* primary/food/attraction 배경 위의 글자색 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161A;
+    --surface: #1E2127;
+    --primary: #7C90F5;
+    --food: #FF9273;
+    --attraction: #48C7B7;
+    --text: #ECEEF2;
+    --muted: #9AA1AD;
+    --border: #2E323A;
+    --danger: #F87171;
+    --shadow: 0 1px 3px rgb(0 0 0 / .4);
+    --on-accent: #10131A;
+  }
+}
+
+/* ---- 기본 ---- */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  -webkit-text-size-adjust: 100%;
+}
+
+h1 { font-size: 20px; margin: 16px; }
+h2 { font-size: 17px; margin: 16px 16px 8px; }
+h3 { font-size: 16px; margin: 0 0 12px; }
+
+.muted { color: var(--muted); font-size: 13px; }
+.error { color: var(--danger); font-size: 14px; margin: 8px 16px; }
+
+/* ---- 컴포넌트 ---- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  margin: 8px;
+}
+
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.btn--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.btn--ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn--danger { color: var(--danger); border-color: var(--border); background: transparent; }
+.btn--block { display: block; width: 100%; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600;
+  color: var(--on-accent);
+}
+.badge--food { background: var(--food); }
+.badge--attraction { background: var(--attraction); }
+.badge--reservation {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip--on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.chip-row {
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  scrollbar-width: none;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+
+/* ---- 날짜 스트립 ---- */
+.date-strip {
+  display: flex; gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  scrollbar-width: none;
+}
+.date-strip::-webkit-scrollbar { display: none; }
+
+.date-strip__item {
+  flex: 0 0 auto;
+  min-width: 56px; min-height: 64px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.date-strip__item--on {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-accent);
+}
+/* 선택된 날짜 안의 보조 텍스트는 강조 배경 위에 놓이므로 대비를 되돌린다 */
+.date-strip__item--on .muted { color: var(--on-accent); opacity: .75; }
+
+/* ---- 폼 ---- */
+input, select, textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+textarea { min-height: 60px; resize: vertical; }
+label { display: block; margin: 12px 0 4px; font-size: 14px; color: var(--muted); }
+label.inline { display: flex; align-items: center; gap: 8px; }
+label.inline input[type="checkbox"],
+label.inline input[type="radio"] { width: auto; min-height: auto; }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 12px 0; }
+legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
+
+/* ---- 하단 시트 ---- */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height: 85vh; overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform .25s ease;
+}
+.sheet.sheet--open { transform: translateY(0); }
+
+.sheet__backdrop {
+  position: fixed; inset: 0; z-index: 10;
+  background: rgb(0 0 0 / .4);
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s ease;
+}
+.sheet__backdrop.sheet--open { opacity: 1; pointer-events: auto; }
+
+/* ---- FAB ---- */
+.fab {
+  position: fixed; right: 16px; z-index: 15;
+  bottom: calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; border-radius: 28px; border: 0;
+  background: var(--primary); color: var(--on-accent);
+  font-size: 28px; line-height: 1;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+/* ---- 드래그 고스트 ----
+   pointer-events: none 이 없으면 고스트가 드롭 대상 판정을 가로챈다. */
+.drag-ghost {
+  position: fixed; z-index: 100;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  opacity: .85;
+  box-shadow: 0 8px 24px rgb(0 0 0 / .25);
+}
+
+/* ---- 하단 탭바 ---- */
+footer {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
 footer nav { display: flex; }
-footer nav a { flex: 1; text-align: center; padding: 12px; text-decoration: none; color: #333; }
-footer nav a.active { font-weight: bold; color: #1a73e8; }
-#map { height: 400px; width: 100%; }
-.source-card, .timetable-item { padding: 8px; border: 1px solid #ddd; margin: 4px 0; cursor: pointer; }
-.memo { color: #666; font-size: 0.9em; white-space: pre-wrap; }
-#day-note textarea { width: 100%; }
+footer nav a {
+  flex: 1; min-height: var(--tabbar-h);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  text-decoration: none; color: var(--muted); font-size: 11px;
+}
+footer nav a.active { color: var(--primary); font-weight: 600; }
+
+/* ---- 인증 화면 (하단 탭 없음) ---- */
+.auth-page {
+  padding-bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh;
+}
+.auth-card { width: 100%; max-width: 360px; }

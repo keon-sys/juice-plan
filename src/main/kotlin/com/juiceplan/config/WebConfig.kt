@@ -12,6 +12,7 @@ class WebConfig(private val authInterceptor: AuthInterceptor) : WebMvcConfigurer
             .addPathPatterns(
                 "/sources", "/sources/**",
                 "/plan", "/plan/**",
+                "/day", "/day/**",
                 "/trip/**",
                 "/api/**"
             )

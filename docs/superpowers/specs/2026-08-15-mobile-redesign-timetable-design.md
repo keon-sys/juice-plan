@@ -92,7 +92,7 @@ juice-plan은 여행 소스(음식점/관광지)를 등록하고 날짜별 동�
 - 맨 아래: 그 날 참고사항
 - 편집 조작은 없다.
 
-`AuthInterceptor`가 모든 요청을 보호하므로 `/day`도 자동으로 로그인 필요 상태가 된다. 별도 설정은 없다.
+`WebConfig`는 인터셉터 경로를 명시적으로 나열하므로(`/sources`, `/plan`, `/trip/**`, `/api/**`), **`/day`를 반드시 추가해야 한다.** 빠뜨리면 로그인 없이 여행 일정이 노출된다.
 
 ---
 
@@ -128,8 +128,10 @@ juice-plan은 여행 소스(음식점/관광지)를 등록하고 날짜별 동�
 var sortOrder: Int = 0
 
 // 추가
-var startMinutes: Int? = null   // 자정 기준 분. 240(04:00) ~ 1680(28:00)
+var startMinutes: Int? = null   // 자정 기준 분. 240(04:00) ~ 1650(27:30)
 ```
+
+그리드는 04:00~28:00(1680)을 덮지만 **시작 시각의 최대값은 27:30(1650)이다.** 28:00은 그리드의 아래 경계여서 블록을 그릴 높이가 없다.
 
 `LocalTime`을 쓰지 않는 이유: 28:00을 표현할 수 없다. 자정 기준 분 정수가 04~28시 그리드와 1:1로 대응하고 위치 계산도 나눗셈 하나로 끝난다.
 
@@ -143,7 +145,7 @@ var startMinutes: Int? = null   // 자정 기준 분. 240(04:00) ~ 1680(28:00)
 
 1. `SORT_ORDER` 컬럼이 없으면 아무것도 하지 않고 종료 (멱등성)
 2. 배정된 소스를 `scheduled_date`, `sort_order` 순으로 읽는다
-3. 날짜별로 10:00(600분)부터 시작해 `직전 시작 + 직전 소요시간 + 30분`씩 이어붙여 `start_minutes`를 채운다. `durationMinutes`가 30의 배수가 아닐 수 있으므로 **계산 결과는 항상 30분 위로 올림**한다(5절의 30분 배수 규칙과 어긋나지 않게). 1680을 넘으면 1680으로 고정한다.
+3. 날짜별로 10:00(600분)부터 시작해 `직전 시작 + 직전 소요시간 + 30분`씩 이어붙여 `start_minutes`를 채운다. `durationMinutes`가 30의 배수가 아닐 수 있으므로 **계산 결과는 항상 30분 위로 올림**한다(5절의 30분 배수 규칙과 어긋나지 않게). 1650(27:30)을 넘으면 1650으로 고정한다.
 4. `ALTER TABLE SOURCE DROP COLUMN IF EXISTS SORT_ORDER`
 
 이렇게 하면 기존에 짜둔 순서가 시각으로 변환되어 보존된다.
@@ -168,7 +170,7 @@ fun remove(sourceId: Long)
 ```
 
 `assign` 검증:
-- `startMinutes` ∈ `[240, 1680]` — 벗어나면 `IllegalArgumentException("시간은 04:00~28:00 사이여야 합니다.")`
+- `startMinutes` ∈ `[240, 1650]` — 벗어나면 `IllegalArgumentException("시간은 04:00~27:30 사이여야 합니다.")`
 - `startMinutes % 30 == 0` — 아니면 `IllegalArgumentException("시간은 30분 단위여야 합니다.")`
 - 소스가 없으면 `NoSuchElementException`
 
@@ -260,6 +262,7 @@ JS 테스트 러너는 도입하지 않으므로 아래는 브라우저에서 �
 - `templates/fragments/layout.html` — 탭 3개
 - `templates/plan/index.html`, `templates/sources/index.html` — 재작성
 - `templates/auth/login.html`, `templates/auth/setup.html` — 새 디자인 적용
+- `config/WebConfig.kt` — 인터셉터 경로에 `/day` 추가
 
 **신규**
 - `schedule/ScheduleTimeMigration.kt`

@@ -35,15 +35,20 @@ window.DragDrop = (function () {
                     dragging = true;
                     // 포인터를 캡처해야 요소 밖으로 나가도 이벤트가 계속 온다.
                     el.setPointerCapture(ev.pointerId);
-                    ghost = el.cloneNode(true);
-                    ghost.classList.add('drag-ghost');
-                    ghost.style.width = el.offsetWidth + 'px';
-                    document.body.appendChild(ghost);
-                    if (opts.onStart) opts.onStart(opts.data);
+                    // 지도 핸들바처럼 요소 자체가 따라 움직이는 경우엔 고스트가 방해된다.
+                    if (!opts.noGhost) {
+                        ghost = el.cloneNode(true);
+                        ghost.classList.add('drag-ghost');
+                        ghost.style.width = el.offsetWidth + 'px';
+                        document.body.appendChild(ghost);
+                    }
+                    if (opts.onStart) opts.onStart(opts.data, startX, startY);
                 }
 
-                ghost.style.left = ev.clientX + 'px';
-                ghost.style.top = ev.clientY + 'px';
+                if (ghost) {
+                    ghost.style.left = ev.clientX + 'px';
+                    ghost.style.top = ev.clientY + 'px';
+                }
                 if (opts.onMove) opts.onMove(opts.data, ev.clientX, ev.clientY);
             }
 

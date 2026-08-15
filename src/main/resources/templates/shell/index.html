@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport-fit=cover 가 있어야 env(safe-area-inset-*) 가 동작한다 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>juice-plan</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<!-- 지도는 셸에 한 번만 만들어지고 뷰가 바뀌어도 재생성되지 않는다 -->
+<div id="map-panel">
+    <div id="map"></div>
+</div>
+
+<div id="sheet-area">
+    <button type="button" id="map-handle" aria-label="지도 접기/펴기">
+        <span id="map-handle-bar"></span>
+    </button>
+
+    <div id="views">
+        <!-- ── 장소 추가 ── -->
+        <section id="view-add" class="view" hidden>
+            <div class="card" id="trip-widget"></div>
+
+            <div class="chip-row">
+                <button type="button" class="chip chip--on" data-filter="all">전체</button>
+                <button type="button" class="chip" data-filter="RESTAURANT">🍴 음식점</button>
+                <button type="button" class="chip" data-filter="ATTRACTION">📍 관광지</button>
+                <button type="button" class="chip" data-filter="unassigned">미배정</button>
+            </div>
+
+            <div id="source-list"></div>
+        </section>
+
+        <!-- ── 동선 변경 ── -->
+        <section id="view-plan" class="view" hidden>
+            <div class="date-strip" data-datestrip="plan"></div>
+            <div data-daynote="plan"></div>
+            <div id="planner">
+                <div id="source-rail"></div>
+                <div id="timetable-scroll">
+                    <div id="timetable">
+                        <div id="hour-lines"></div>
+                        <div id="blocks"></div>
+                        <div id="drop-preview" hidden></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── 계획 보기 ── -->
+        <section id="view-day" class="view" hidden>
+            <div class="date-strip" data-datestrip="day"></div>
+            <div data-daynote="day"></div>
+            <div id="day-timetable-scroll">
+                <div id="day-timetable">
+                    <div id="day-hour-lines"></div>
+                    <div id="day-blocks"></div>
+                </div>
+            </div>
+            <p id="day-empty" class="card muted" hidden>이 날은 아직 일정이 없습니다.</p>
+        </section>
+    </div>
+</div>
+
+<button type="button" class="fab" id="addSourceBtn" aria-label="장소 추가" hidden>+</button>
+
+<!-- ── 장소 추가/수정 시트 ── -->
+<div class="sheet__backdrop" id="sheetBackdrop"></div>
+<div class="sheet" id="sourceSheet">
+    <h3 id="sheetTitle">새 장소 추가</h3>
+
+    <form id="sourceForm">
+        <label for="googleMapsUrl">구글맵 공유 링크</label>
+        <div style="display:flex; gap:8px;">
+            <input type="text" id="googleMapsUrl" name="googleMapsUrl" required>
+            <button type="button" class="btn" id="parseLinkBtn" style="white-space:nowrap;">가져오기</button>
+        </div>
+        <p id="parseError" class="error" style="display:none; margin:8px 0 0;"></p>
+
+        <label for="name">이름</label>
+        <input type="text" id="name" name="name" required>
+
+        <div style="display:flex; gap:8px;">
+            <div style="flex:1;">
+                <label for="latitude">위도</label>
+                <input type="number" step="any" id="latitude" name="latitude" required>
+            </div>
+            <div style="flex:1;">
+                <label for="longitude">경도</label>
+                <input type="number" step="any" id="longitude" name="longitude" required>
+            </div>
+        </div>
+
+        <fieldset>
+            <legend>장소 종류</legend>
+            <label class="inline"><input type="radio" name="placeType" value="RESTAURANT" required> 🍴 음식점</label>
+            <label class="inline"><input type="radio" name="placeType" value="ATTRACTION"> 📍 관광지</label>
+        </fieldset>
+
+        <label>예상 소요 시간</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+            <input type="number" min="0" name="durationHours" value="0" aria-label="시간"> 시간
+            <input type="number" min="0" max="59" name="durationMinutesPart" value="0" aria-label="분"> 분
+        </div>
+
+        <label class="inline" style="margin-top:16px;">
+            <input type="checkbox" id="reservationRequired" name="reservationRequired"> 예약 필요
+        </label>
+        <div id="reservationDeadlineWrap" style="display:none;">
+            <label for="reservationDeadline">예약 마감일</label>
+            <input type="date" id="reservationDeadline" name="reservationDeadline">
+        </div>
+
+        <label for="memo">비고</label>
+        <textarea id="memo" name="memo" rows="2" placeholder="예: 창가 자리 요청, 현금만 가능"></textarea>
+
+        <p id="sourceError" class="error" style="display:none; margin:8px 0 0;"></p>
+
+        <button type="submit" class="btn btn--primary btn--block" id="sourceSubmit" style="margin-top:16px;">저장</button>
+        <button type="button" class="btn btn--ghost btn--block" id="sheetClose" style="margin-top:8px;">닫기</button>
+    </form>
+</div>
+
+<!-- ── 시각 수정 시트 (동선 변경) ── -->
+<div class="sheet__backdrop" id="timeSheetBackdrop"></div>
+<div class="sheet" id="timeSheet">
+    <h3 id="timeSheetTitle"></h3>
+    <label for="timeSheetSelect">시작 시각</label>
+    <select id="timeSheetSelect"></select>
+    <button type="button" class="btn btn--primary btn--block" id="timeSheetSave" style="margin-top:16px;">저장</button>
+    <button type="button" class="btn btn--danger btn--block" id="timeSheetRemove" style="margin-top:8px;">배정 해제</button>
+    <button type="button" class="btn btn--ghost btn--block" id="timeSheetClose" style="margin-top:8px;">닫기</button>
+</div>
+
+<footer>
+    <nav>
+        <a href="#add" data-tab="add"><span aria-hidden="true">📍</span><span>장소 추가</span></a>
+        <a href="#plan" data-tab="plan"><span aria-hidden="true">🗓️</span><span>동선 변경</span></a>
+        <a href="#day" data-tab="day"><span aria-hidden="true">🧭</span><span>계획 보기</span></a>
+    </nav>
+</footer>
+
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    var SOURCES = /*[[${sources}]]*/ [];
+    var TRIP = /*[[${trip}]]*/ null;
+    var DAY_NOTES = /*[[${dayNotes}]]*/ {};
+    /*]]>*/
+</script>
+
+<script th:src="@{/js/timegrid.js}"></script>
+<script th:src="@{/js/dragdrop.js}"></script>
+<script th:src="@{/js/api.js}"></script>
+<script th:src="@{/js/mapview.js}"></script>
+<script th:src="@{/js/datestrip.js}"></script>
+<script th:src="@{/js/daynote.js}"></script>
+<script th:src="@{/js/view-add.js}"></script>
+<script th:src="@{/js/view-plan.js}"></script>
+<script th:src="@{/js/view-day.js}"></script>
+<script th:src="@{/js/shell.js}"></script>
+<script th:src="'https://maps.googleapis.com/maps/api/js?key=' + ${@environment.getProperty('app.google-maps-api-key')} + '&callback=initMap'"
+        async defer></script>
+</body>
+</html>

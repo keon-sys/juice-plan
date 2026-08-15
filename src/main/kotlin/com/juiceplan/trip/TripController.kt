@@ -1,20 +1,17 @@
 package com.juiceplan.trip
 
-import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.servlet.view.RedirectView
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDate
 
-@Controller
+data class TripRequest(val startDate: LocalDate, val endDate: LocalDate)
+
+@RestController
 class TripController(private val tripService: TripService) {
 
-    @PostMapping("/trip")
-    fun save(
-        @RequestParam startDate: String,
-        @RequestParam endDate: String
-    ): RedirectView {
-        tripService.save(LocalDate.parse(startDate), LocalDate.parse(endDate))
-        return RedirectView("/sources")
-    }
+    /** 여행은 하나뿐이라 upsert다. 두 번 호출해도 새로 만들지 않고 갱신한다. */
+    @PostMapping("/api/trip")
+    fun save(@RequestBody request: TripRequest): Trip =
+        tripService.save(request.startDate, request.endDate)
 }

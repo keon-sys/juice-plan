@@ -1,9 +1,5 @@
 package com.juiceplan.source
 
-import com.juiceplan.auth.SESSION_AUTHENTICATED_KEY
-import com.ninjasquad.springmockk.MockkBean
-import io.mockk.every
-import org.hamcrest.Matchers.containsString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -12,19 +8,13 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
-import org.springframework.mock.web.MockHttpSession
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
-import java.io.IOException
 import java.time.LocalDate
 
 @SpringBootTest
@@ -35,243 +25,131 @@ class SourceControllerIntegrationTest {
     @Autowired lateinit var mockMvc: MockMvc
     @Autowired lateinit var sourceRepository: SourceRepository
 
-    @MockkBean
-    lateinit var urlResolver: UrlResolver
-
-    private lateinit var session: MockHttpSession
-
     @BeforeEach
     fun setUp() {
         sourceRepository.deleteAll()
-        session = MockHttpSession()
-        session.setAttribute(SESSION_AUTHENTICATED_KEY, true)
     }
 
-    @Test
-    fun `creating a source persists it with memo and redirects to sources list`() {
-        mockMvc.perform(
-            post("/sources").session(session)
-                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
-                .param("name", "경복궁")
-                .param("latitude", "37.5796")
-                .param("longitude", "126.9770")
-                .param("placeType", "ATTRACTION")
-                .param("durationHours", "1")
-                .param("durationMinutesPart", "30")
-                .param("reservationRequired", "false")
-                .param("memo", "창가 자리 요청")
+    private fun body(
+        name: String = "경복궁",
+        placeType: String = "ATTRACTION",
+        reservationRequired: Boolean = false,
+        reservationDeadline: String? = null
+    ) = """
+        {
+          "googleMapsUrl": "https://maps.app.goo.gl/abc",
+          "name": "$name",
+          "latitude": 37.5796,
+          "longitude": 126.9770,
+          "placeType": "$placeType",
+          "durationHours": 1,
+          "durationMinutesPart": 30,
+          "reservationRequired": $reservationRequired,
+          "reservationDeadline": ${if (reservationDeadline == null) "null" else "\"$reservationDeadline\""},
+          "memo": null
+        }
+    """.trimIndent()
+
+    private fun newSource() = sourceRepository.save(
+        Source(
+            googleMapsUrl = "https://maps.app.goo.gl/x",
+            name = "기존",
+            latitude = 37.0,
+            longitude = 127.0,
+            placeType = PlaceType.ATTRACTION,
+            durationMinutes = 60,
+            reservationRequired = false
         )
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/sources"))
-
-        val saved = sourceRepository.findAll()
-        assertEquals(1, saved.size)
-        assertEquals(90, saved[0].durationMinutes)
-        assertEquals("창가 자리 요청", saved[0].memo)
-    }
+    )
 
     @Test
-    fun `creating a source without reservationRequired param defaults to false like an unchecked checkbox`() {
+    fun `creates a source and returns it with a generated id`() {
         mockMvc.perform(
-            post("/sources").session(session)
-                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
-                .param("name", "경복궁")
-                .param("latitude", "37.5796")
-                .param("longitude", "126.9770")
-                .param("placeType", "ATTRACTION")
-                .param("durationHours", "1")
-                .param("durationMinutesPart", "30")
-        )
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/sources"))
-
-        val saved = sourceRepository.findAll()
-        assertEquals(1, saved.size)
-        assertEquals(false, saved[0].reservationRequired)
-    }
-
-    @Test
-    fun `deleting a source removes it`() {
-        val source = sourceRepository.save(
-            Source(
-                googleMapsUrl = "https://maps.app.goo.gl/abc",
-                name = "경복궁",
-                latitude = 37.5796,
-                longitude = 126.9770,
-                placeType = PlaceType.ATTRACTION,
-                durationMinutes = 90,
-                reservationRequired = false
-            )
-        )
-
-        mockMvc.perform(delete("/sources/${source.id}").session(session))
-            .andExpect(status().is3xxRedirection)
-
-        assertTrue(sourceRepository.findAll().isEmpty())
-    }
-
-    @Test
-    fun `parse-link returns parsed place on success`() {
-        every { urlResolver.resolve(any()) } returns
-            "https://www.google.com/maps/place/Gyeongbokgung+Palace/@37.5796,126.9770,17z/data=xyz"
-
-        mockMvc.perform(
-            post("/api/sources/parse-link").session(session)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"url":"https://maps.app.goo.gl/abc"}""")
+            post("/api/sources").contentType(MediaType.APPLICATION_JSON).content(body())
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.success").value(true))
-            .andExpect(jsonPath("$.place.latitude").value(37.5796))
+            .andExpect(jsonPath("$.id").isNumber)
+            .andExpect(jsonPath("$.name").value("경복궁"))
+            // 1시간 30분 -> 90분
+            .andExpect(jsonPath("$.durationMinutes").value(90))
+            .andExpect(jsonPath("$.scheduledDate").doesNotExist())
+
+        assertEquals(1, sourceRepository.count())
     }
 
     @Test
-    fun `parse-link returns failure when resolver throws`() {
-        every { urlResolver.resolve(any()) } throws IOException("boom")
-
+    fun `rejects a reservation without a deadline`() {
         mockMvc.perform(
-            post("/api/sources/parse-link").session(session)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"url":"https://maps.app.goo.gl/broken"}""")
+            post("/api/sources").contentType(MediaType.APPLICATION_JSON)
+                .content(body(reservationRequired = true))
+        )
+            .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("예약이 필요한 경우 예약 마감일을 입력해야 합니다."))
+
+        assertEquals(0, sourceRepository.count())
+    }
+
+    @Test
+    fun `accepts a reservation with a deadline`() {
+        mockMvc.perform(
+            post("/api/sources").contentType(MediaType.APPLICATION_JSON)
+                .content(body(reservationRequired = true, reservationDeadline = "2026-08-25"))
         )
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.reservationRequired").value(true))
+            .andExpect(jsonPath("$.reservationDeadline").value("2026-08-25"))
     }
 
     @Test
-    fun `sources page lists saved sources`() {
-        sourceRepository.save(
-            Source(
-                googleMapsUrl = "https://maps.app.goo.gl/abc",
-                name = "경복궁",
-                latitude = 37.5796,
-                longitude = 126.9770,
-                placeType = PlaceType.ATTRACTION,
-                durationMinutes = 90,
-                reservationRequired = false
-            )
-        )
-
-        mockMvc.perform(get("/sources").session(session))
-            .andExpect(status().isOk)
-            .andExpect(content().string(containsString("경복궁")))
-    }
-
-    @Test
-    fun `sources page shows the assigned date and time of a scheduled source`() {
-        sourceRepository.save(
-            Source(
-                googleMapsUrl = "https://maps.app.goo.gl/abc",
-                name = "아사쿠사",
-                latitude = 35.7148,
-                longitude = 139.7967,
-                placeType = PlaceType.ATTRACTION,
-                durationMinutes = 90,
-                reservationRequired = false,
-                scheduledDate = LocalDate.of(2026, 9, 1),
-                startMinutes = 630
-            )
-        )
-
-        mockMvc.perform(get("/sources").session(session))
-            .andExpect(status().isOk)
-            .andExpect(content().string(containsString("2026-09-01 10:30")))
-    }
-
-    @Test
-    fun `sources page renders a past-midnight slot as an early morning time`() {
-        sourceRepository.save(
-            Source(
-                googleMapsUrl = "https://maps.app.goo.gl/abc",
-                name = "심야식당",
-                latitude = 35.6895,
-                longitude = 139.6917,
-                placeType = PlaceType.RESTAURANT,
-                durationMinutes = 60,
-                reservationRequired = false,
-                scheduledDate = LocalDate.of(2026, 9, 1),
-                // 1590 = 26:30 -> 목록에서는 다음날 02:30으로 접어 보여준다
-                startMinutes = 1590
-            )
-        )
-
-        mockMvc.perform(get("/sources").session(session))
-            .andExpect(status().isOk)
-            .andExpect(content().string(containsString("2026-09-01 02:30")))
-    }
-
-    @Test
-    fun `unauthenticated access to sources page redirects to gate`() {
-        mockMvc.perform(get("/sources"))
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/"))
-    }
-
-    @Test
-    fun `unauthenticated parse-link api call is blocked with 401, not a redirect`() {
-        mockMvc.perform(
-            post("/api/sources/parse-link")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""{"url":"https://maps.app.goo.gl/abc"}""")
-        ).andExpect(status().isUnauthorized)
-    }
-
-    @Test
-    fun `creating a source with reservationRequired but no deadline redirects back with a flash error instead of 500`() {
-        mockMvc.perform(
-            post("/sources").session(session)
-                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
-                .param("name", "경복궁")
-                .param("latitude", "37.5796")
-                .param("longitude", "126.9770")
-                .param("placeType", "ATTRACTION")
-                .param("durationHours", "1")
-                .param("durationMinutesPart", "30")
-                .param("reservationRequired", "true")
-                .param("memo", "")
-        )
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/sources"))
-            .andExpect(flash().attributeExists("error"))
-
-        assertTrue(sourceRepository.findAll().isEmpty())
-    }
-
-    @Test
-    fun `updating a source persists the changes via PUT`() {
-        val source = sourceRepository.save(
-            Source(
-                googleMapsUrl = "https://maps.app.goo.gl/abc",
-                name = "경복궁",
-                latitude = 37.5796,
-                longitude = 126.9770,
-                placeType = PlaceType.ATTRACTION,
-                durationMinutes = 90,
-                reservationRequired = false
-            )
-        )
+    fun `updates a source and returns the new state`() {
+        val existing = newSource()
 
         mockMvc.perform(
-            put("/sources/${source.id}").session(session)
-                .param("googleMapsUrl", "https://maps.app.goo.gl/abc")
-                .param("name", "경복궁 야간개장")
-                .param("latitude", "37.58")
-                .param("longitude", "126.98")
-                .param("placeType", "ATTRACTION")
-                .param("durationHours", "2")
-                .param("durationMinutesPart", "0")
-                .param("reservationRequired", "true")
-                .param("reservationDeadline", "2026-09-01")
-                .param("memo", "야간개장 예약 필요")
+            put("/api/sources/${existing.id}").contentType(MediaType.APPLICATION_JSON)
+                .content(body(name = "수정된 이름", placeType = "RESTAURANT"))
         )
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/sources"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(existing.id))
+            .andExpect(jsonPath("$.name").value("수정된 이름"))
+            .andExpect(jsonPath("$.placeType").value("RESTAURANT"))
+    }
 
-        val updated = sourceRepository.findById(source.id).get()
-        assertEquals("경복궁 야간개장", updated.name)
-        assertEquals(120, updated.durationMinutes)
-        assertEquals(true, updated.reservationRequired)
-        assertEquals(LocalDate.of(2026, 9, 1), updated.reservationDeadline)
-        assertEquals("야간개장 예약 필요", updated.memo)
+    @Test
+    fun `deletes a source`() {
+        val existing = newSource()
+
+        mockMvc.perform(delete("/api/sources/${existing.id}"))
+            .andExpect(status().isOk)
+
+        assertTrue(sourceRepository.findById(existing.id).isEmpty)
+    }
+
+    @Test
+    fun `returns 404 when updating a source that does not exist`() {
+        mockMvc.perform(
+            put("/api/sources/9999").contentType(MediaType.APPLICATION_JSON).content(body())
+        ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `returns 404 when deleting a source that does not exist`() {
+        mockMvc.perform(delete("/api/sources/9999"))
+            .andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `keeps the schedule assignment when a source is edited`() {
+        val existing = newSource()
+        existing.scheduledDate = LocalDate.of(2026, 9, 1)
+        existing.startMinutes = 600
+        sourceRepository.save(existing)
+
+        mockMvc.perform(
+            put("/api/sources/${existing.id}").contentType(MediaType.APPLICATION_JSON)
+                .content(body(name = "이름만 변경"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.scheduledDate").value("2026-09-01"))
+            .andExpect(jsonPath("$.startMinutes").value(600))
     }
 }

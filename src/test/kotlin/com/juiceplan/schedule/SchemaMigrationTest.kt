@@ -10,10 +10,10 @@ import org.springframework.test.context.ActiveProfiles
 
 @SpringBootTest
 @ActiveProfiles("test")
-class ScheduleTimeMigrationTest {
+class SchemaMigrationTest {
 
     @Autowired lateinit var jdbcTemplate: JdbcTemplate
-    @Autowired lateinit var migration: ScheduleTimeMigration
+    @Autowired lateinit var migration: SchemaMigration
 
     @BeforeEach
     fun setUp() {
@@ -128,4 +128,29 @@ class ScheduleTimeMigrationTest {
         assertEquals(600, startMinutesOf(1))
         assertEquals(false, sortOrderColumnExists())
     }
+
+    @Test
+    fun `drops the app_settings table left over from the removed auth feature`() {
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS APP_SETTINGS (ID BIGINT PRIMARY KEY, PASSWORD_HASH VARCHAR(255))")
+
+        migration.migrate()
+
+        assertEquals(false, tableExists("APP_SETTINGS"))
+    }
+
+    @Test
+    fun `dropping app_settings is safe when the table is already gone`() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS APP_SETTINGS")
+
+        migration.migrate()
+
+        assertEquals(false, tableExists("APP_SETTINGS"))
+    }
+
+    private fun tableExists(name: String): Boolean =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = ?",
+            Int::class.java,
+            name
+        )!! > 0
 }

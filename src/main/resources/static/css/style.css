@@ -17,6 +17,7 @@
   --radius-sm: 10px;
   --slot-h: 28px;        /* 타임테이블 30분 슬롯 높이 — timegrid.js의 SLOT_H와 같아야 한다 */
   --tabbar-h: 56px;
+  --map-h: 200px;        /* shell.js의 MAP_HEIGHT와 같아야 한다 */
   --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
   --on-accent: #FFFFFF;  /* primary/food/attraction 배경 위의 글자색 */
 }
@@ -47,8 +48,10 @@ body {
   line-height: 1.5;
   background: var(--bg);
   color: var(--text);
-  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   -webkit-text-size-adjust: 100%;
+  /* 셸은 전부 fixed 배치라 문서가 스크롤될 일이 없다 */
+  height: 100vh;
+  overflow: hidden;
 }
 
 h1 { font-size: 20px; margin: 16px; }
@@ -221,21 +224,63 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
 }
 
 /* ============================================================
-   일자별 동선 (편집 화면)
+   셸 — 지도는 고정, 그 아래 시트 영역이 위로 올라와 덮는다
    ============================================================ */
-#map-panel { height: 200px; transition: height .2s ease; }
-#map-panel.collapsed { height: 0; overflow: hidden; }
-#plan-app #map { height: 100%; width: 100%; }
+#map-panel {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--map-h);
+}
+#map { height: 100%; width: 100%; }
 
-#map-toggle-row { display: flex; justify-content: center; }
+#sheet-area {
+  position: fixed;
+  top: var(--map-h);
+  left: 0; right: 0;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: 0 -2px 12px rgb(0 0 0 / .12);
+  display: flex; flex-direction: column;
+  /* 접히면 지도 높이만큼 위로 올라가 지도를 덮는다.
+     지도를 숨기지 않는 이유: 구글맵은 크기가 0이 되면 타일 로딩이 깨진다. */
+  transform: translateY(0);
+  will-change: transform;
+}
 
+#map-handle {
+  flex: 0 0 auto;
+  width: 100%; min-height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0;
+  cursor: grab;
+  touch-action: none;
+}
+#map-handle-bar {
+  width: 44px; height: 5px; border-radius: 3px;
+  background: var(--border);
+}
+
+#views {
+  flex: 1;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.view {
+  flex: 1;
+  overflow-y: auto;
+  display: flex; flex-direction: column;
+  min-height: 0;
+}
+
+/* ============================================================
+   동선 변경 (편집)
+   ============================================================ */
 #planner {
+  flex: 1;
   display: flex;
   gap: 8px;
   padding: 0 8px 8px;
-  /* 화면 나머지를 채운다. 위쪽 요소들의 높이는 JS가 --planner-offset 으로 알려준다. */
-  height: calc(100vh - var(--planner-offset, 360px));
-  min-height: 220px;
+  min-height: 0;
 }
 
 #source-rail {
@@ -305,9 +350,54 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
 }
 
 /* ============================================================
-   계획 보기 (읽기 전용)
+   계획 보기 (읽기 전용) — 소스 레일이 없어 타임테이블이 폭을 다 쓴다
    ============================================================ */
-#dayview-app #map { height: 40vh; width: 100%; }
+#day-timetable-scroll {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin: 0 8px 8px;
+  min-height: 0;
+}
+#day-timetable {
+  position: relative;
+  height: calc(48 * var(--slot-h));
+}
+#day-blocks { position: absolute; inset: 0; margin-left: 40px; }
+#day-blocks .tt-block { cursor: pointer; font-size: 12px; padding: 4px 8px; }
+
+/* ============================================================
+   참고사항 (접힘/펼침)
+   ============================================================ */
+.daynote { padding: 0; overflow: hidden; }
+
+.daynote__header {
+  width: 100%; min-height: 44px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 16px;
+  background: transparent; border: 0;
+  color: var(--text); font: inherit; font-size: 14px;
+  text-align: left; cursor: pointer;
+}
+.daynote__preview {
+  flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.daynote__caret { margin-left: auto; }
+.daynote__dirty { color: var(--primary); font-size: 10px; }
+
+.daynote__text { margin: 0 16px; width: calc(100% - 32px); }
+.daynote__read { margin: 0 16px 14px; white-space: pre-wrap; }
+
+/* 저장 버튼을 전체 폭으로 두면 그 날 메모가 아니라 전체 계획을 저장하는 것처럼 보인다.
+   내용 폭으로 오른쪽에 붙인다. */
+.daynote__actions {
+  display: flex; justify-content: flex-end;
+  padding: 8px 16px 14px;
+}
+.daynote__save { min-height: 36px; padding: 0 20px; font-size: 14px; }
 
 /* ---- 하단 탭바 ---- */
 footer {
@@ -324,11 +414,3 @@ footer nav a {
   text-decoration: none; color: var(--muted); font-size: 11px;
 }
 footer nav a.active { color: var(--primary); font-weight: 600; }
-
-/* ---- 인증 화면 (하단 탭 없음) ---- */
-.auth-page {
-  padding-bottom: 0;
-  display: flex; align-items: center; justify-content: center;
-  min-height: 100vh;
-}
-.auth-card { width: 100%; max-width: 360px; }

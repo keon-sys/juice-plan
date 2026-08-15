@@ -56,7 +56,8 @@ class SourceService(private val sourceRepository: SourceRepository) {
     }
 
     fun delete(id: Long) {
-        sourceRepository.deleteById(id)
+        // deleteById는 없는 id를 조용히 무시한다. 404를 내보내려면 먼저 확인해야 한다.
+        sourceRepository.delete(get(id))
     }
 
     private fun toDurationMinutes(hours: Int, minutes: Int): Int = hours * 60 + minutes

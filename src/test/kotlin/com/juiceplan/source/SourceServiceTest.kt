@@ -77,11 +77,32 @@ class SourceServiceTest {
 
     @Test
     fun `delete removes the source by id`() {
-        every { repository.deleteById(5L) } returns Unit
+        val existing = validInput().let {
+            Source(
+                id = 5L,
+                googleMapsUrl = it.googleMapsUrl,
+                name = it.name,
+                latitude = it.latitude,
+                longitude = it.longitude,
+                placeType = it.placeType,
+                durationMinutes = 60,
+                reservationRequired = false
+            )
+        }
+        every { repository.findById(5L) } returns Optional.of(existing)
+        every { repository.delete(existing) } returns Unit
 
         service.delete(5L)
 
-        verify { repository.deleteById(5L) }
+        verify { repository.delete(existing) }
+    }
+
+    @Test
+    fun `delete throws when the source does not exist`() {
+        // deleteById 는 없는 id를 조용히 무시하므로, 404를 내보내려면 먼저 조회해야 한다
+        every { repository.findById(99L) } returns Optional.empty()
+
+        assertThrows<NoSuchElementException> { service.delete(99L) }
     }
 
     @Test

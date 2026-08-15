@@ -1,6 +1,5 @@
 package com.juiceplan.schedule
 
-import com.juiceplan.auth.SESSION_AUTHENTICATED_KEY
 import com.juiceplan.source.PlaceType
 import com.juiceplan.source.Source
 import com.juiceplan.source.SourceRepository
@@ -12,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
-import org.springframework.mock.web.MockHttpSession
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
@@ -28,13 +26,9 @@ class ScheduleControllerIntegrationTest {
     @Autowired lateinit var mockMvc: MockMvc
     @Autowired lateinit var sourceRepository: SourceRepository
 
-    private lateinit var session: MockHttpSession
-
     @BeforeEach
     fun setUp() {
         sourceRepository.deleteAll()
-        session = MockHttpSession()
-        session.setAttribute(SESSION_AUTHENTICATED_KEY, true)
     }
 
     private fun newSource(name: String) = sourceRepository.save(
@@ -54,7 +48,7 @@ class ScheduleControllerIntegrationTest {
         val a = newSource("A")
 
         mockMvc.perform(
-            put("/api/schedule/${a.id}").session(session)
+            put("/api/schedule/${a.id}")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"date":"2026-09-01","startMinutes":600}""")
         ).andExpect(status().isOk)
@@ -69,7 +63,7 @@ class ScheduleControllerIntegrationTest {
         val a = newSource("A")
 
         mockMvc.perform(
-            put("/api/schedule/${a.id}").session(session)
+            put("/api/schedule/${a.id}")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"date":"2026-09-01","startMinutes":120}""")
         ).andExpect(status().isBadRequest)
@@ -80,7 +74,7 @@ class ScheduleControllerIntegrationTest {
         val a = newSource("A")
 
         mockMvc.perform(
-            put("/api/schedule/${a.id}").session(session)
+            put("/api/schedule/${a.id}")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"date":"2026-09-01","startMinutes":615}""")
         ).andExpect(status().isBadRequest)
@@ -93,7 +87,7 @@ class ScheduleControllerIntegrationTest {
         a.startMinutes = 600
         sourceRepository.save(a)
 
-        mockMvc.perform(delete("/api/schedule/${a.id}").session(session))
+        mockMvc.perform(delete("/api/schedule/${a.id}"))
             .andExpect(status().isOk)
 
         val reloaded = sourceRepository.findById(a.id).get()
@@ -102,11 +96,17 @@ class ScheduleControllerIntegrationTest {
     }
 
     @Test
-    fun `unauthenticated request is blocked with 401, not a redirect`() {
+    fun `returns 404 when assigning a source that does not exist`() {
         mockMvc.perform(
-            put("/api/schedule/1")
+            put("/api/schedule/9999")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""{"date":"2026-09-01","startMinutes":600}""")
-        ).andExpect(status().isUnauthorized)
+        ).andExpect(status().isNotFound)
+    }
+
+    @Test
+    fun `returns 404 when removing a source that does not exist`() {
+        mockMvc.perform(delete("/api/schedule/9999"))
+            .andExpect(status().isNotFound)
     }
 }

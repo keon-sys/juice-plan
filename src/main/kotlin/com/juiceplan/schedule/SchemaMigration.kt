@@ -13,16 +13,14 @@ private const val MIGRATION_FIRST_START_MINUTES = 600
 private const val MIGRATION_GAP_MINUTES = 30
 
 /**
- * sortOrder(순서) 기반 배정을 startMinutes(시각) 기반으로 옮기는 1회성 마이그레이션.
+ * ddl-auto: update가 하지 못하는 스키마 정리를 담당한다. Hibernate는 컬럼과 테이블을 추가만 하고
+ * 삭제하지 않으므로, 코드에서 없앤 것들이 DB에 남아 문제를 일으킨다.
  *
- * ddl-auto: update는 컬럼을 추가만 하고 삭제하지 않으므로, 엔티티에서 sortOrder를 뺀 뒤에도
- * DB에는 SORT_ORDER NOT NULL 컬럼이 남아 새 소스 저장이 전부 실패한다. 이 클래스가 값을 옮기고
- * 컬럼을 지운다. SORT_ORDER 컬럼이 없으면 아무것도 하지 않으므로 몇 번 실행해도 안전하다.
- *
- * ApplicationRunner로 등록해 Hibernate가 START_MINUTES 컬럼을 만든 뒤에 실행되도록 한다.
+ * ApplicationRunner로 등록해 Hibernate가 스키마를 만든 뒤에 실행되도록 한다.
+ * 각 단계는 대상이 이미 없으면 아무것도 하지 않으므로 몇 번 실행해도 안전하다.
  */
 @Component
-class ScheduleTimeMigration(private val jdbcTemplate: JdbcTemplate) : ApplicationRunner {
+class SchemaMigration(private val jdbcTemplate: JdbcTemplate) : ApplicationRunner {
 
     override fun run(args: ApplicationArguments) {
         migrate()
@@ -30,6 +28,22 @@ class ScheduleTimeMigration(private val jdbcTemplate: JdbcTemplate) : Applicatio
 
     @Transactional
     fun migrate() {
+        migrateSortOrderToStartMinutes()
+        dropAppSettings()
+    }
+
+    /** 인증을 없앴으므로 비밀번호 해시를 담던 테이블을 지운다. */
+    private fun dropAppSettings() {
+        jdbcTemplate.execute("DROP TABLE IF EXISTS APP_SETTINGS")
+    }
+
+    /**
+     * sortOrder(순서) 기반 배정을 startMinutes(시각) 기반으로 옮긴다.
+     *
+     * 엔티티에서 sortOrder를 뺀 뒤에도 DB에는 SORT_ORDER NOT NULL 컬럼이 남아
+     * 새 소스 저장이 전부 실패한다. 값을 옮기고 컬럼을 지운다.
+     */
+    private fun migrateSortOrderToStartMinutes() {
         if (!sortOrderColumnExists()) return
 
         val rows = jdbcTemplate.queryForList(

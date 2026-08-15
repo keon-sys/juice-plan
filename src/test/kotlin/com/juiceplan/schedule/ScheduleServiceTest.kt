@@ -5,6 +5,7 @@ import com.juiceplan.source.Source
 import com.juiceplan.source.SourceRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
@@ -17,6 +18,8 @@ class ScheduleServiceTest {
 
     @Autowired lateinit var sourceRepository: SourceRepository
     @Autowired lateinit var scheduleService: ScheduleService
+
+    private val date = LocalDate.of(2026, 9, 1)
 
     private fun newSource(name: String) = sourceRepository.save(
         Source(
@@ -31,44 +34,97 @@ class ScheduleServiceTest {
     )
 
     @Test
-    fun `assignDay sets scheduledDate and sequential sortOrder`() {
+    fun `assign sets scheduledDate and startMinutes together`() {
         val a = newSource("A")
-        val b = newSource("B")
-        val date = LocalDate.of(2026, 9, 1)
 
-        scheduleService.assignDay(date, listOf(a.id, b.id))
+        scheduleService.assign(a.id, date, 600)
 
-        val reloadedA = sourceRepository.findById(a.id).get()
-        val reloadedB = sourceRepository.findById(b.id).get()
-        assertEquals(date, reloadedA.scheduledDate)
-        assertEquals(0, reloadedA.sortOrder)
-        assertEquals(date, reloadedB.scheduledDate)
-        assertEquals(1, reloadedB.sortOrder)
+        val reloaded = sourceRepository.findById(a.id).get()
+        assertEquals(date, reloaded.scheduledDate)
+        assertEquals(600, reloaded.startMinutes)
     }
 
     @Test
-    fun `assignDay unassigns sources previously on that day but missing from the new list`() {
+    fun `assign moves an already scheduled source to another date and time`() {
         val a = newSource("A")
-        val b = newSource("B")
-        val date = LocalDate.of(2026, 9, 1)
-        scheduleService.assignDay(date, listOf(a.id, b.id))
+        scheduleService.assign(a.id, date, 600)
 
-        scheduleService.assignDay(date, listOf(a.id))
+        scheduleService.assign(a.id, date.plusDays(1), 900)
 
-        val reloadedB = sourceRepository.findById(b.id).get()
-        assertNull(reloadedB.scheduledDate)
+        val reloaded = sourceRepository.findById(a.id).get()
+        assertEquals(date.plusDays(1), reloaded.scheduledDate)
+        assertEquals(900, reloaded.startMinutes)
     }
 
     @Test
-    fun `remove clears scheduledDate`() {
+    fun `remove clears scheduledDate and startMinutes together`() {
         val a = newSource("A")
-        val date = LocalDate.of(2026, 9, 1)
-        scheduleService.assignDay(date, listOf(a.id))
+        scheduleService.assign(a.id, date, 600)
 
         scheduleService.remove(a.id)
 
         val reloaded = sourceRepository.findById(a.id).get()
         assertNull(reloaded.scheduledDate)
-        assertEquals(0, reloaded.sortOrder)
+        assertNull(reloaded.startMinutes)
+    }
+
+    @Test
+    fun `assign accepts the boundary slots 0400 and 2730`() {
+        val a = newSource("A")
+        val b = newSource("B")
+
+        scheduleService.assign(a.id, date, 240)
+        scheduleService.assign(b.id, date, 1650)
+
+        assertEquals(240, sourceRepository.findById(a.id).get().startMinutes)
+        assertEquals(1650, sourceRepository.findById(b.id).get().startMinutes)
+    }
+
+    @Test
+    fun `assign rejects a time before 0400`() {
+        val a = newSource("A")
+
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            scheduleService.assign(a.id, date, 210)
+        }
+        assertEquals("시간은 04:00~27:30 사이여야 합니다.", ex.message)
+    }
+
+    @Test
+    fun `assign rejects 2800 because it is the grid edge, not a placeable slot`() {
+        val a = newSource("A")
+
+        assertThrows(IllegalArgumentException::class.java) {
+            scheduleService.assign(a.id, date, 1680)
+        }
+    }
+
+    @Test
+    fun `assign rejects a time that is not on a 30 minute slot`() {
+        val a = newSource("A")
+
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            scheduleService.assign(a.id, date, 615)
+        }
+        assertEquals("시간은 30분 단위여야 합니다.", ex.message)
+    }
+
+    @Test
+    fun `assign rejects an unknown source id`() {
+        assertThrows(NoSuchElementException::class.java) {
+            scheduleService.assign(9999L, date, 600)
+        }
+    }
+
+    @Test
+    fun `assign allows two sources to overlap in time`() {
+        val a = newSource("A")
+        val b = newSource("B")
+
+        scheduleService.assign(a.id, date, 600)
+        scheduleService.assign(b.id, date, 600)
+
+        assertEquals(600, sourceRepository.findById(a.id).get().startMinutes)
+        assertEquals(600, sourceRepository.findById(b.id).get().startMinutes)
     }
 }

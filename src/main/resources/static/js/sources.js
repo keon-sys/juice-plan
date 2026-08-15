@@ -1,3 +1,58 @@
+const sourceForm = document.getElementById('sourceForm');
+const submitBtn = sourceForm.querySelector('button[type="submit"]');
+const sheet = document.getElementById('sourceSheet');
+const backdrop = document.getElementById('sheetBackdrop');
+const sheetTitle = document.getElementById('sheetTitle');
+let editingId = null;
+
+function openSheet() {
+    sheet.classList.add('sheet--open');
+    backdrop.classList.add('sheet--open');
+}
+
+function closeSheet() {
+    sheet.classList.remove('sheet--open');
+    backdrop.classList.remove('sheet--open');
+}
+
+document.getElementById('addSourceBtn').addEventListener('click', () => {
+    editingId = null;
+    sourceForm.reset();
+    document.getElementById('reservationDeadlineWrap').style.display = 'none';
+    document.getElementById('parseError').style.display = 'none';
+    sheetTitle.textContent = '새 소스 추가';
+    submitBtn.textContent = '저장';
+    openSheet();
+});
+
+document.getElementById('sheetClose').addEventListener('click', closeSheet);
+backdrop.addEventListener('click', closeSheet);
+
+// 여행 기간 수정 폼 토글
+const tripEditBtn = document.getElementById('tripEditBtn');
+if (tripEditBtn) {
+    tripEditBtn.addEventListener('click', () => {
+        const form = document.getElementById('trip-edit');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+}
+
+// 필터 칩: 카드의 data-place-type / data-scheduled 로 숨긴다
+document.querySelectorAll('.chip[data-filter]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+        document.querySelectorAll('.chip[data-filter]').forEach((c) => c.classList.remove('chip--on'));
+        chip.classList.add('chip--on');
+        const filter = chip.dataset.filter;
+        document.querySelectorAll('.source-card').forEach((card) => {
+            const show =
+                filter === 'all' ||
+                (filter === 'unassigned' && card.dataset.scheduled === 'false') ||
+                filter === card.dataset.placeType;
+            card.style.display = show ? '' : 'none';
+        });
+    });
+});
+
 document.getElementById('parseLinkBtn').addEventListener('click', async () => {
     const url = document.getElementById('googleMapsUrl').value;
     const errorEl = document.getElementById('parseError');
@@ -48,14 +103,10 @@ document.querySelectorAll('.delete-btn').forEach((btn) => {
     });
 });
 
-// Edit affordance: reuses the existing add-source form. Clicking "수정" populates the form
-// from the clicked item's data-* attributes and flips the form's submit handler over to a
-// fetch-based PUT /sources/{id} call (PUT isn't a native HTML form method), instead of
-// letting the form fall through to its default POST /sources submission.
-const sourceForm = document.getElementById('sourceForm');
-const submitBtn = sourceForm.querySelector('button[type="submit"]');
-let editingId = null;
-
+// Edit affordance: reuses the add-source form inside the sheet. Clicking "수정" populates the
+// form from the clicked item's data-* attributes and flips the form's submit handler over to a
+// fetch-based PUT /sources/{id} call (PUT isn't a native HTML form method), instead of letting
+// the form fall through to its default POST /sources submission.
 document.querySelectorAll('.edit-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
         editingId = btn.getAttribute('data-id');
@@ -81,8 +132,10 @@ document.querySelectorAll('.edit-btn').forEach((btn) => {
 
         sourceForm.querySelector('textarea[name="memo"]').value = btn.getAttribute('data-memo') || '';
 
+        document.getElementById('parseError').style.display = 'none';
+        sheetTitle.textContent = '소스 수정';
         submitBtn.textContent = '수정 저장';
-        sourceForm.scrollIntoView({ behavior: 'smooth' });
+        openSheet();
     });
 });
 

@@ -158,6 +158,49 @@ class SourceControllerIntegrationTest {
     }
 
     @Test
+    fun `sources page shows the assigned date and time of a scheduled source`() {
+        sourceRepository.save(
+            Source(
+                googleMapsUrl = "https://maps.app.goo.gl/abc",
+                name = "아사쿠사",
+                latitude = 35.7148,
+                longitude = 139.7967,
+                placeType = PlaceType.ATTRACTION,
+                durationMinutes = 90,
+                reservationRequired = false,
+                scheduledDate = LocalDate.of(2026, 9, 1),
+                startMinutes = 630
+            )
+        )
+
+        mockMvc.perform(get("/sources").session(session))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("2026-09-01 10:30")))
+    }
+
+    @Test
+    fun `sources page renders a past-midnight slot as an early morning time`() {
+        sourceRepository.save(
+            Source(
+                googleMapsUrl = "https://maps.app.goo.gl/abc",
+                name = "심야식당",
+                latitude = 35.6895,
+                longitude = 139.6917,
+                placeType = PlaceType.RESTAURANT,
+                durationMinutes = 60,
+                reservationRequired = false,
+                scheduledDate = LocalDate.of(2026, 9, 1),
+                // 1590 = 26:30 -> 목록에서는 다음날 02:30으로 접어 보여준다
+                startMinutes = 1590
+            )
+        )
+
+        mockMvc.perform(get("/sources").session(session))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("2026-09-01 02:30")))
+    }
+
+    @Test
     fun `unauthenticated access to sources page redirects to gate`() {
         mockMvc.perform(get("/sources"))
             .andExpect(status().is3xxRedirection)

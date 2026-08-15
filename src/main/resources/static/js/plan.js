@@ -1,16 +1,29 @@
 (function () {
     const appEl = document.getElementById('plan-app');
-    const tripStart = new Date(appEl.dataset.tripStart);
-    const tripEnd = new Date(appEl.dataset.tripEnd);
+    const TG = window.TimeGrid;
+    const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+    // ---- 날짜 목록 ----
+    // 'YYYY-MM-DDT00:00:00' 으로 파싱해 로컬 자정으로 고정한다.
+    // 'YYYY-MM-DD' 만 넘기면 UTC로 해석돼 타임존에 따라 하루씩 밀린다.
     const days = [];
-    for (let d = new Date(tripStart); d <= tripEnd; d.setDate(d.getDate() + 1)) {
-        days.push(new Date(d).toISOString().slice(0, 10));
+    {
+        const cur = new Date(appEl.dataset.tripStart + 'T00:00:00');
+        const end = new Date(appEl.dataset.tripEnd + 'T00:00:00');
+        while (cur <= end) {
+            const y = cur.getFullYear();
+            const m = String(cur.getMonth() + 1).padStart(2, '0');
+            const d = String(cur.getDate()).padStart(2, '0');
+            days.push(`${y}-${m}-${d}`);
+            cur.setDate(cur.getDate() + 1);
+        }
     }
 
     let selectedDate = days[0];
     let map;
     const markers = {};
+    let dayPath = null;
+    let sheetSourceId = null;
 
     function isUnauthorized(res) {
         if (res.status === 401) {
@@ -21,31 +34,121 @@
         return false;
     }
 
-    function renderDateTabs() {
-        const container = document.getElementById('date-tabs');
-        container.innerHTML = '';
+    function scheduledOn(date) {
+        return SOURCES
+            .filter((s) => s.scheduledDate === date && s.startMinutes != null)
+            .sort((a, b) => a.startMinutes - b.startMinutes);
+    }
+
+    // ---- 날짜 스트립 ----
+    function renderDateStrip() {
+        const strip = document.getElementById('date-strip');
+        strip.innerHTML = '';
         days.forEach((date) => {
+            const d = new Date(date + 'T00:00:00');
+            const count = SOURCES.filter((s) => s.scheduledDate === date).length;
+
             const btn = document.createElement('button');
-            btn.textContent = date;
-            btn.classList.toggle('active', date === selectedDate);
+            btn.type = 'button';
+            btn.className = 'date-strip__item' + (date === selectedDate ? ' date-strip__item--on' : '');
+            btn.innerHTML =
+                `<span class="muted">${WEEKDAYS[d.getDay()]}</span>` +
+                `<strong>${d.getDate()}</strong>` +
+                `<span class="muted">${count > 0 ? count + '곳' : ''}</span>`;
             btn.addEventListener('click', () => {
                 selectedDate = date;
-                renderDateTabs();
-                renderTimetable();
-                renderDayNote();
+                renderAll();
             });
-            container.appendChild(btn);
+            strip.appendChild(btn);
         });
     }
 
+    // ---- 소스 레일 ----
+    // 미배정 소스만 보여준다. 지도가 준비되면 지도 영역 안의 것만 남긴다.
+    function railSources() {
+        const unscheduled = SOURCES.filter((s) => !s.scheduledDate);
+        if (!map) return unscheduled;
+        const bounds = map.getBounds();
+        if (!bounds) return unscheduled;
+        return unscheduled.filter((s) => bounds.contains({ lat: s.latitude, lng: s.longitude }));
+    }
+
+    function renderRail() {
+        const rail = document.getElementById('source-rail');
+        rail.innerHTML = '';
+        railSources().forEach((s) => {
+            const card = document.createElement('div');
+            card.className = 'card source-card';
+            card.dataset.id = String(s.id);
+            card.innerHTML =
+                `<div>${s.placeType === 'RESTAURANT' ? '🍴' : '📍'} ${escapeHtml(s.name)}</div>` +
+                `<div class="muted">${s.durationMinutes}분${s.reservationRequired ? ' · 🔔' : ''}</div>`;
+            attachDrag(card, s.id);
+            rail.appendChild(card);
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ---- 타임테이블 ----
+    function renderHourLines() {
+        const container = document.getElementById('hour-lines');
+        if (container.childElementCount > 0) return;   // 한 번만 그린다
+        for (let m = TG.DAY_START; m <= TG.DAY_END; m += 60) {
+            const line = document.createElement('div');
+            line.className = 'hour-line';
+            line.style.top = TG.topFor(m) + 'px';
+            line.textContent = TG.formatSlot(m);
+            container.appendChild(line);
+        }
+    }
+
+    function renderTimetable() {
+        const blocksEl = document.getElementById('blocks');
+        blocksEl.innerHTML = '';
+
+        const laid = TG.layoutBlocks(scheduledOn(selectedDate).map((s) => ({
+            id: s.id,
+            startMinutes: s.startMinutes,
+            durationMinutes: s.durationMinutes,
+        })));
+
+        laid.forEach((b) => {
+            const s = SOURCES.find((x) => x.id === b.id);
+            const el = document.createElement('div');
+            el.className = 'tt-block ' +
+                (s.placeType === 'RESTAURANT' ? 'tt-block--food' : 'tt-block--attraction') +
+                (s.reservationRequired ? ' tt-block--reserved' : '');
+            el.dataset.id = String(s.id);
+
+            const top = TG.topFor(b.startMinutes);
+            // 28:00을 넘기는 블록은 그리드 밖으로 삐져나오지 않게 아래에서 자른다.
+            const gridBottom = TG.topFor(TG.DAY_END);
+            el.style.top = top + 'px';
+            el.style.height = Math.min(TG.heightFor(b.durationMinutes), gridBottom - top) + 'px';
+            el.style.width = `calc((100% - 4px) / ${b.columnCount})`;
+            el.style.left = `calc((100% - 4px) / ${b.columnCount} * ${b.column})`;
+
+            const end = b.startMinutes + b.durationMinutes;
+            const endLabel = end > TG.DAY_END ? '28:00+' : TG.formatSlot(end);
+            el.textContent = `${TG.formatSlot(b.startMinutes)}–${endLabel} ${s.name}`;
+
+            attachDrag(el, s.id);
+            blocksEl.appendChild(el);
+        });
+    }
+
+    // ---- 참고사항 ----
     function renderDayNote() {
-        const textarea = document.getElementById('day-note-text');
-        textarea.value = DAY_NOTES[selectedDate] || '';
+        document.getElementById('day-note-text').value = DAY_NOTES[selectedDate] || '';
     }
 
     async function saveDayNote() {
-        const textarea = document.getElementById('day-note-text');
-        const memo = textarea.value;
+        const memo = document.getElementById('day-note-text').value;
         try {
             const res = await fetch(`/api/day-notes/${selectedDate}`, {
                 method: 'POST',
@@ -54,72 +157,23 @@
             });
             if (isUnauthorized(res)) return;
             if (!res.ok) throw new Error('요청 실패');
-            if (memo.trim() === '') {
-                delete DAY_NOTES[selectedDate];
-            } else {
-                DAY_NOTES[selectedDate] = memo;
-            }
+            if (memo.trim() === '') delete DAY_NOTES[selectedDate];
+            else DAY_NOTES[selectedDate] = memo;
         } catch (e) {
             alert('저장 실패, 다시 시도해주세요.');
         }
     }
 
-    function availableSources() {
-        const unscheduled = SOURCES.filter((s) => !s.scheduledDate);
-        if (!map) return unscheduled;
-        const bounds = map.getBounds();
-        if (!bounds) return unscheduled;
-        return unscheduled.filter((s) => bounds.contains({ lat: s.latitude, lng: s.longitude }));
-    }
-
-    function renderAvailableList() {
-        const list = document.getElementById('available-list');
-        list.innerHTML = '';
-        availableSources().forEach((s) => {
-            const item = document.createElement('div');
-            item.className = 'source-card';
-            item.textContent = s.name;
-            item.draggable = true;
-            item.dataset.id = s.id;
-            item.addEventListener('click', () => focusOnMap(s));
-            item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', String(s.id));
-            });
-            list.appendChild(item);
-        });
-    }
-
-    function timetableSources() {
-        return SOURCES
-            .filter((s) => s.scheduledDate === selectedDate)
-            .sort((a, b) => a.sortOrder - b.sortOrder);
-    }
-
-    function renderTimetable() {
-        const container = document.getElementById('timetable');
-        container.innerHTML = '';
-        timetableSources().forEach((s) => {
-            const item = document.createElement('div');
-            item.className = 'timetable-item';
-            item.draggable = true;
-            item.dataset.id = s.id;
-
-            const label = document.createElement('span');
-            label.textContent = s.name;
-            item.appendChild(label);
-
-            const removeBtn = document.createElement('button');
-            removeBtn.textContent = 'X';
-            removeBtn.addEventListener('click', () => removeFromSchedule(s.id));
-            item.appendChild(removeBtn);
-
-            item.addEventListener('click', () => focusOnMap(s));
-            item.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', String(s.id));
-            });
-
-            container.appendChild(item);
-        });
+    // ---- 지도 ----
+    function renderMapForDay() {
+        if (!map) return;
+        if (dayPath) {
+            dayPath.setMap(null);
+            dayPath = null;
+        }
+        const path = scheduledOn(selectedDate).map((s) => ({ lat: s.latitude, lng: s.longitude }));
+        if (path.length < 2) return;
+        dayPath = new google.maps.Polyline({ path, map, strokeOpacity: 0.8, strokeWeight: 3 });
     }
 
     function focusOnMap(source) {
@@ -132,79 +186,145 @@
         }
     }
 
-    // Computes the index (into the timetable's ordered-id array, dragged item excluded)
-    // that a drop at `clientY` should be inserted at, based on the vertical midpoint of
-    // each currently-rendered timetable item. Falls back to "append to end" (returns the
-    // item count) when the drop lands below every item, or into an empty timetable.
-    function computeDropIndex(container, clientY, draggedId) {
-        const items = Array.from(container.querySelectorAll('.timetable-item'))
-            .filter((el) => Number(el.dataset.id) !== draggedId);
-        for (let i = 0; i < items.length; i++) {
-            const rect = items[i].getBoundingClientRect();
-            const midpoint = rect.top + rect.height / 2;
-            if (clientY < midpoint) {
-                return i;
-            }
+    // ---- 드래그 ----
+    function attachDrag(el, sourceId) {
+        window.DragDrop.makeDraggable(el, {
+            data: sourceId,
+            onMove: (id, x, y) => showPreview(id, x, y),
+            onDrop: (id, x, y) => commitDrop(id, x, y),
+            onCancel: () => hidePreview(),
+            onTap: (id) => openTimeSheet(id),
+        });
+    }
+
+    function pointToStartMinutes(clientY) {
+        const scroll = document.getElementById('timetable-scroll');
+        const rect = scroll.getBoundingClientRect();
+        return TG.snapToSlot(clientY - rect.top + scroll.scrollTop);
+    }
+
+    function isOver(elementId, x, y) {
+        const rect = document.getElementById(elementId).getBoundingClientRect();
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+    }
+
+    function hidePreview() {
+        document.getElementById('drop-preview').hidden = true;
+    }
+
+    function showPreview(sourceId, x, y) {
+        const preview = document.getElementById('drop-preview');
+        if (!isOver('timetable-scroll', x, y)) {
+            preview.hidden = true;
+            return;
         }
-        return items.length;
+        const s = SOURCES.find((v) => v.id === sourceId);
+        const start = pointToStartMinutes(y);
+        const gridBottom = TG.topFor(TG.DAY_END);
+        const top = TG.topFor(start);
+
+        preview.hidden = false;
+        preview.style.top = top + 'px';
+        preview.style.height = Math.min(TG.heightFor(s.durationMinutes), gridBottom - top) + 'px';
+
+        const end = start + s.durationMinutes;
+        preview.textContent =
+            `${TG.formatSlot(start)} – ${end > TG.DAY_END ? '28:00+' : TG.formatSlot(end)}`;
+
+        autoScroll(y);
     }
 
-    // Inserts (or moves) `sourceId` into the current day's ordered id array at `index` and
-    // persists the full array. Works uniformly whether `sourceId` is already scheduled on
-    // this day (a true reorder) or is coming from the available pool / another day (an
-    // insert-at-position add) — either way the dragged id is removed first, then spliced
-    // back in at the target position.
-    async function insertIntoDayAt(sourceId, index) {
-        const currentIds = timetableSources().map((s) => s.id).filter((id) => id !== sourceId);
-        const clampedIndex = Math.max(0, Math.min(index, currentIds.length));
-        currentIds.splice(clampedIndex, 0, sourceId);
-        await saveDay(currentIds);
+    // 포인터가 타임테이블 위/아래 가장자리 40px 안에 있으면 스크롤한다.
+    function autoScroll(clientY) {
+        const scroll = document.getElementById('timetable-scroll');
+        const rect = scroll.getBoundingClientRect();
+        const EDGE = 40;
+        if (clientY - rect.top < EDGE) scroll.scrollTop -= 12;
+        else if (rect.bottom - clientY < EDGE) scroll.scrollTop += 12;
     }
 
-    async function removeFromSchedule(sourceId) {
+    async function commitDrop(sourceId, x, y) {
+        hidePreview();
+
+        if (isOver('timetable-scroll', x, y)) {
+            await assign(sourceId, selectedDate, pointToStartMinutes(y));
+        } else if (isOver('source-rail', x, y)) {
+            await unassign(sourceId);
+        }
+    }
+
+    // ---- API ----
+    async function assign(sourceId, date, startMinutes) {
+        const s = SOURCES.find((v) => v.id === sourceId);
+        const prev = { scheduledDate: s.scheduledDate, startMinutes: s.startMinutes };
+        try {
+            const res = await fetch(`/api/schedule/${sourceId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date, startMinutes }),
+            });
+            if (isUnauthorized(res)) return;
+            if (!res.ok) throw new Error('요청 실패');
+
+            s.scheduledDate = date;
+            s.startMinutes = startMinutes;
+        } catch (e) {
+            s.scheduledDate = prev.scheduledDate;
+            s.startMinutes = prev.startMinutes;
+            alert('저장 실패, 다시 시도해주세요.');
+        }
+        renderAll();
+    }
+
+    async function unassign(sourceId) {
+        const s = SOURCES.find((v) => v.id === sourceId);
+        const prev = { scheduledDate: s.scheduledDate, startMinutes: s.startMinutes };
         try {
             const res = await fetch(`/api/schedule/${sourceId}`, { method: 'DELETE' });
             if (isUnauthorized(res)) return;
             if (!res.ok) throw new Error('요청 실패');
-            const source = SOURCES.find((s) => s.id === sourceId);
-            source.scheduledDate = null;
-            source.sortOrder = 0;
-            renderAvailableList();
-            renderTimetable();
+
+            s.scheduledDate = null;
+            s.startMinutes = null;
         } catch (e) {
+            s.scheduledDate = prev.scheduledDate;
+            s.startMinutes = prev.startMinutes;
             alert('저장 실패, 다시 시도해주세요.');
         }
+        renderAll();
     }
 
-    async function saveDay(orderedIds) {
-        try {
-            const res = await fetch(`/api/schedule/day/${selectedDate}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sourceIds: orderedIds }),
-            });
-            if (isUnauthorized(res)) return;
-            if (!res.ok) throw new Error('요청 실패');
+    // ---- 시각 수정 시트 ----
+    // 드래그가 어려운 상황을 위한 폴백: 탭하면 시각을 직접 고른다.
+    function openTimeSheet(sourceId) {
+        const s = SOURCES.find((v) => v.id === sourceId);
+        sheetSourceId = sourceId;
+        focusOnMap(s);
 
-            orderedIds.forEach((id, index) => {
-                const source = SOURCES.find((s) => s.id === id);
-                source.scheduledDate = selectedDate;
-                source.sortOrder = index;
-            });
-            SOURCES.forEach((s) => {
-                if (s.scheduledDate === selectedDate && !orderedIds.includes(s.id)) {
-                    s.scheduledDate = null;
-                    s.sortOrder = 0;
-                }
-            });
+        document.getElementById('timeSheetTitle').textContent = s.name;
 
-            renderAvailableList();
-            renderTimetable();
-        } catch (e) {
-            alert('저장 실패, 다시 시도해주세요.');
+        const select = document.getElementById('timeSheetSelect');
+        select.innerHTML = '';
+        for (let m = TG.DAY_START; m <= TG.LAST_START; m += TG.SLOT) {
+            const opt = document.createElement('option');
+            opt.value = String(m);
+            opt.textContent = TG.formatSlot(m);
+            select.appendChild(opt);
         }
+        select.value = String(s.startMinutes != null ? s.startMinutes : 600);
+
+        document.getElementById('timeSheetRemove').hidden = !s.scheduledDate;
+        document.getElementById('timeSheet').classList.add('sheet--open');
+        document.getElementById('timeSheetBackdrop').classList.add('sheet--open');
     }
 
+    function closeTimeSheet() {
+        document.getElementById('timeSheet').classList.remove('sheet--open');
+        document.getElementById('timeSheetBackdrop').classList.remove('sheet--open');
+        sheetSourceId = null;
+    }
+
+    // ---- 지도 초기화 ----
     function debounce(fn, wait) {
         let timeout;
         return (...args) => {
@@ -217,10 +337,12 @@
         map = new google.maps.Map(document.getElementById('map'), {
             center: { lat: SOURCES[0]?.latitude ?? 37.5665, lng: SOURCES[0]?.longitude ?? 126.9780 },
             zoom: 13,
+            disableDefaultUI: true,
+            zoomControl: true,
         });
 
         SOURCES.forEach((s) => {
-            const marker = new google.maps.Marker({
+            markers[s.id] = new google.maps.Marker({
                 position: { lat: s.latitude, lng: s.longitude },
                 map,
                 title: s.name,
@@ -228,35 +350,68 @@
                     ? { url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' }
                     : undefined,
             });
-            markers[s.id] = marker;
         });
 
-        map.addListener('bounds_changed', debounce(renderAvailableList, 300));
+        map.addListener('bounds_changed', debounce(renderRail, 300));
+        renderMapForDay();
     }
 
     window.initMap = initMap;
 
+    // ---- 렌더 ----
+    function renderAll() {
+        renderDateStrip();
+        renderHourLines();
+        renderRail();
+        renderTimetable();
+        renderDayNote();
+        renderMapForDay();
+    }
+
+    // #planner 는 화면 나머지를 채워야 한다. 날짜 스트립·지도·참고사항 높이가
+    // 바뀔 때마다 남는 높이를 CSS 변수로 알려준다.
+    function updatePlannerHeight() {
+        const tabbar = parseInt(
+            getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'), 10
+        ) || 56;
+        const used =
+            document.getElementById('date-strip').offsetHeight +
+            document.getElementById('map-panel').offsetHeight +
+            document.getElementById('map-toggle-row').offsetHeight +
+            document.getElementById('day-note').offsetHeight +
+            tabbar;
+        document.documentElement.style.setProperty('--planner-offset', used + 'px');
+    }
+
+    // ---- 이벤트 바인딩 ----
     document.getElementById('day-note-save').addEventListener('click', saveDayNote);
 
-    const availableListEl = document.getElementById('available-list');
-    availableListEl.addEventListener('dragover', (e) => e.preventDefault());
-    availableListEl.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const id = Number(e.dataTransfer.getData('text/plain'));
-        removeFromSchedule(id);
+    document.getElementById('map-toggle').addEventListener('click', (e) => {
+        const panel = document.getElementById('map-panel');
+        panel.classList.toggle('collapsed');
+        e.target.textContent = panel.classList.contains('collapsed') ? '지도 펼치기' : '지도 접기';
+        // 높이 전환 애니메이션(.2s)이 끝난 뒤에 재계산한다
+        setTimeout(updatePlannerHeight, 220);
     });
 
-    const timetableEl = document.getElementById('timetable');
-    timetableEl.addEventListener('dragover', (e) => e.preventDefault());
-    timetableEl.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const id = Number(e.dataTransfer.getData('text/plain'));
-        const dropIndex = computeDropIndex(timetableEl, e.clientY, id);
-        insertIntoDayAt(id, dropIndex);
+    document.getElementById('timeSheetSave').addEventListener('click', async () => {
+        const start = Number(document.getElementById('timeSheetSelect').value);
+        const id = sheetSourceId;
+        closeTimeSheet();
+        await assign(id, selectedDate, start);
     });
 
-    renderDateTabs();
-    renderDayNote();
-    renderAvailableList();
-    renderTimetable();
+    document.getElementById('timeSheetRemove').addEventListener('click', async () => {
+        const id = sheetSourceId;
+        closeTimeSheet();
+        await unassign(id);
+    });
+
+    document.getElementById('timeSheetClose').addEventListener('click', closeTimeSheet);
+    document.getElementById('timeSheetBackdrop').addEventListener('click', closeTimeSheet);
+
+    window.addEventListener('resize', updatePlannerHeight);
+
+    renderAll();
+    updatePlannerHeight();
 })();

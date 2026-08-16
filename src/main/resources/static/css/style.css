@@ -17,7 +17,7 @@
   --radius-sm: 10px;
   --slot-h: 28px;        /* 타임테이블 30분 슬롯 높이 — timegrid.js의 SLOT_H와 같아야 한다 */
   --tabbar-h: 56px;
-  --map-h: 200px;        /* shell.js의 MAP_HEIGHT와 같아야 한다 */
+  --map-h: 200px;        /* 중간 단에서 드러나는 지도 띠의 높이 — shell.js의 MAP_PEEK과 같아야 한다 */
   --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
   --on-accent: #FFFFFF;  /* primary/food/attraction 배경 위의 글자색 */
 }
@@ -41,6 +41,11 @@
 /* ---- 기본 ---- */
 * { box-sizing: border-box; }
 
+/* 브라우저 기본 [hidden] { display: none } 은 UA 스타일이라 작성자 스타일의
+   display 선언에 무조건 진다. .view 처럼 display 를 잡는 규칙이 있으면
+   el.hidden = true 가 무시돼 숨긴 요소가 그대로 그려진다. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
@@ -49,10 +54,27 @@ body {
   background: var(--bg);
   color: var(--text);
   -webkit-text-size-adjust: 100%;
-  /* 셸은 전부 fixed 배치라 문서가 스크롤될 일이 없다 */
+  /* 셸은 전부 fixed 배치라 문서가 스크롤될 일이 없다.
+     100vh 는 모바일에서 주소창 뒤 영역까지 포함해 실제로 보이는 높이보다 크다.
+     dvh 를 아는 브라우저는 그쪽을 쓰고, 모르면 위의 vh 로 남는다. */
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
+
+/* 안쪽 스크롤이 끝에 닿은 뒤에도 계속 밀면 그 스크롤이 문서로 넘어간다.
+   그러면 모바일 브라우저가 페이지를 튕기면서 fixed 로 붙여둔 하단 탭바가
+   화면 밖으로 밀려난다. 전파를 각 스크롤 영역 안에서 끊는다. */
+html, body { overscroll-behavior: none; }
+
+.view,
+#source-list,
+#source-rail,
+#timetable-scroll,
+#day-timetable-scroll,
+.sheet,
+.chip-row,
+.date-strip { overscroll-behavior: contain; }
 
 h1 { font-size: 20px; margin: 16px; }
 h2 { font-size: 17px; margin: 16px 16px 8px; }
@@ -135,6 +157,7 @@ h3 { font-size: 16px; margin: 0 0 12px; }
 
 /* ---- 날짜 스트립 ---- */
 .date-strip {
+  flex: 0 0 auto;   /* 타임테이블이 남은 높이를 다 가져가도 눌리지 않게 */
   display: flex; gap: 8px;
   overflow-x: auto;
   padding: 8px;
@@ -142,11 +165,12 @@ h3 { font-size: 16px; margin: 0 0 12px; }
 }
 .date-strip::-webkit-scrollbar { display: none; }
 
+/* 날짜 칸은 개수를 적지 않고 한 줄로 낮게 둔다. 아낀 높이는 타임테이블이 쓴다. */
 .date-strip__item {
   flex: 0 0 auto;
-  min-width: 56px; min-height: 64px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px;
+  min-width: 52px; min-height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -188,7 +212,9 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
   background: var(--surface);
   border-radius: var(--radius) var(--radius) 0 0;
   padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
-  max-height: 85vh; overflow-y: auto;
+  max-height: 85vh;
+  max-height: 85dvh;
+  overflow-y: auto;
   transform: translateY(100%);
   transition: transform .25s ease;
 }
@@ -224,16 +250,22 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
 }
 
 /* ============================================================
-   셸 — 지도는 고정, 그 아래 시트 영역이 위로 올라와 덮는다
+   셸 — 지도는 화면 전체에 깔려 있고, 시트가 그 위를 3단으로 오르내린다
    ============================================================ */
+
+/* 지도는 처음부터 화면 전체 크기다. 크기를 바꾸지 않기 때문에
+   구글맵 타일이 깨질 일이 없고, 시트는 그 위를 덮기만 하면 된다.
+   --map-h 는 이제 지도 높이가 아니라 '중간 단에서 드러나는 띠의 높이'다. */
 #map-panel {
-  position: fixed; top: 0; left: 0; right: 0;
-  height: var(--map-h);
+  position: fixed; inset: 0; z-index: 0;
 }
 #map { height: 100%; width: 100%; }
 
+/* 시트는 바닥(탭바 위)에 고정된 채 윗변만 오르내린다.
+   transform 으로 통째로 밀면 높이가 그대로라 3단계에서 아래에 지도가 드러난다.
+   top 을 움직여야 시트가 실제로 늘어나 화면을 채운다. */
 #sheet-area {
-  position: fixed;
+  position: fixed; z-index: 1;
   top: var(--map-h);
   left: 0; right: 0;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
@@ -241,10 +273,8 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
   border-radius: var(--radius) var(--radius) 0 0;
   box-shadow: 0 -2px 12px rgb(0 0 0 / .12);
   display: flex; flex-direction: column;
-  /* 접히면 지도 높이만큼 위로 올라가 지도를 덮는다.
-     지도를 숨기지 않는 이유: 구글맵은 크기가 0이 되면 타일 로딩이 깨진다. */
-  transform: translateY(0);
-  will-change: transform;
+  transition: top .25s ease;
+  will-change: top;
 }
 
 #map-handle {
@@ -273,6 +303,36 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
 }
 
 /* ============================================================
+   장소 추가
+   ============================================================ */
+/* 뷰 전체가 스크롤되면 목록이 길어질 때 여행기간 카드와 필터 칩까지 같이
+   밀려 올라가 가려진다. 뷰는 고정하고 목록만 스크롤시킨다. */
+#view-add { overflow: hidden; }
+#trip-widget, #view-add .chip-row { flex: 0 0 auto; }
+#source-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+/* 수정/삭제는 설명 아래가 아니라 카드 오른쪽 끝 위에 붙인다.
+   설명이 두 줄만 돼도 버튼 줄만큼의 높이를 통째로 아낀다. */
+#source-list .source-card {
+  display: flex; align-items: flex-start; gap: 12px;
+}
+#source-list .source-card__body { flex: 1 1 auto; min-width: 0; }
+#source-list .source-card__actions {
+  flex: 0 0 auto;
+  display: flex; gap: 6px;
+}
+#source-list .source-card__actions .btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* ============================================================
    동선 변경 (편집)
    ============================================================ */
 #planner {
@@ -289,6 +349,8 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
   display: flex; flex-direction: column; gap: 8px;
 }
 #source-rail .source-card {
+  /* flex 항목 기본 shrink 를 끄지 않으면 카드가 많아질 때 스크롤 대신 납작해진다 */
+  flex: 0 0 auto;
   margin: 0;
   padding: 10px 12px;
   font-size: 13px;
@@ -300,6 +362,19 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
   font-size: 12px;
   padding: 8px;
 }
+
+/* 지도 밖에 있는 미배정 장소도 감추지 않고 구분선 아래에 흐리게 남긴다 */
+.rail-divider {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+  color: var(--muted); font-size: 11px;
+  padding-top: 4px;
+}
+.rail-divider::after {
+  content: ''; flex: 1;
+  border-top: 1px solid var(--border);
+}
+#source-rail .source-card--outside { opacity: .55; }
 
 #timetable-scroll {
   flex: 1;

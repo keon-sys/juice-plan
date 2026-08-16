@@ -3,7 +3,6 @@ window.ViewPlan = (function () {
     const TG = window.TimeGrid;
 
     let selectedDate = null;
-    let sheetSourceId = null;
 
     function escapeHtml(text) {
         const div = document.createElement('div');
@@ -30,21 +29,45 @@ window.ViewPlan = (function () {
             .sort((a, b) => a.startMinutes - b.startMinutes);
     }
 
+    function unscheduled() {
+        return window.SOURCES.filter((s) => !s.scheduledDate);
+    }
+
     // ---- 소스 레일 ----
+    function railCard(s, outside) {
+        const card = document.createElement('div');
+        card.className = 'card source-card' + (outside ? ' source-card--outside' : '');
+        card.dataset.id = String(s.id);
+        card.innerHTML =
+            `<div>${s.placeType === 'RESTAURANT' ? '🍴' : '📍'} ${escapeHtml(s.name)}</div>` +
+            `<div class="muted">${s.durationMinutes}분${s.reservationRequired ? ' · 🔔' : ''}</div>`;
+        attachDrag(card, s.id);
+        return card;
+    }
+
+    /**
+     * 지금 지도에 보이는 장소를 위로 올려주되, 보이지 않는 장소도 구분선 아래에
+     * 흐리게 남긴다. 예전처럼 걸러내 버리면 타임테이블에서 뺀 장소가 지도 밖에
+     * 있을 때 레일에 나타나지 않아 사라진 것처럼 보였다.
+     */
     function renderRail() {
         const rail = document.getElementById('source-rail');
         rail.innerHTML = '';
-        const unscheduled = window.SOURCES.filter((s) => !s.scheduledDate);
-        window.MapView.withinBounds(unscheduled).forEach((s) => {
-            const card = document.createElement('div');
-            card.className = 'card source-card';
-            card.dataset.id = String(s.id);
-            card.innerHTML =
-                `<div>${s.placeType === 'RESTAURANT' ? '🍴' : '📍'} ${escapeHtml(s.name)}</div>` +
-                `<div class="muted">${s.durationMinutes}분${s.reservationRequired ? ' · 🔔' : ''}</div>`;
-            attachDrag(card, s.id);
-            rail.appendChild(card);
-        });
+
+        const all = unscheduled();
+        const inView = window.MapView.withinBounds(all);
+        const inViewIds = new Set(inView.map((s) => s.id));
+        const outside = all.filter((s) => !inViewIds.has(s.id));
+
+        inView.forEach((s) => rail.appendChild(railCard(s, false)));
+
+        if (outside.length > 0) {
+            const divider = document.createElement('div');
+            divider.className = 'rail-divider';
+            divider.textContent = `지도 밖 ${outside.length}곳`;
+            rail.appendChild(divider);
+            outside.forEach((s) => rail.appendChild(railCard(s, true)));
+        }
     }
 
     // ---- 타임테이블 ----
@@ -101,7 +124,9 @@ window.ViewPlan = (function () {
             onMove: (id, x, y) => showPreview(id, x, y),
             onDrop: (id, x, y) => commitDrop(id, x, y),
             onCancel: () => hidePreview(),
-            onTap: (id) => openTimeSheet(id),
+            // 탭은 지도만 그쪽으로 옮긴다. 시각을 고르는 시트는 두지 않는다 —
+            // 배정도 시각 변경도 타임테이블 위에서 끄는 것만으로 한다.
+            onTap: (id) => window.MapView.focus(window.SOURCES.find((v) => v.id === id)),
         });
     }
 
@@ -185,52 +210,9 @@ window.ViewPlan = (function () {
         show();
     }
 
-    // ---- 시각 수정 시트 (드래그가 어려울 때의 폴백) ----
-    function openTimeSheet(sourceId) {
-        const s = window.SOURCES.find((v) => v.id === sourceId);
-        sheetSourceId = sourceId;
-        window.MapView.focus(s);
-
-        document.getElementById('timeSheetTitle').textContent = s.name;
-
-        const select = document.getElementById('timeSheetSelect');
-        select.innerHTML = '';
-        for (let m = TG.DAY_START; m <= TG.LAST_START; m += TG.SLOT) {
-            const opt = document.createElement('option');
-            opt.value = String(m);
-            opt.textContent = TG.formatSlot(m);
-            select.appendChild(opt);
-        }
-        select.value = String(s.startMinutes != null ? s.startMinutes : 600);
-
-        document.getElementById('timeSheetRemove').hidden = !s.scheduledDate;
-        document.getElementById('timeSheet').classList.add('sheet--open');
-        document.getElementById('timeSheetBackdrop').classList.add('sheet--open');
-    }
-
-    function closeTimeSheet() {
-        document.getElementById('timeSheet').classList.remove('sheet--open');
-        document.getElementById('timeSheetBackdrop').classList.remove('sheet--open');
-        sheetSourceId = null;
-    }
-
     // ---- 공개 ----
     function init() {
-        document.getElementById('timeSheetClose').addEventListener('click', closeTimeSheet);
-        document.getElementById('timeSheetBackdrop').addEventListener('click', closeTimeSheet);
-
-        document.getElementById('timeSheetSave').addEventListener('click', async () => {
-            const start = Number(document.getElementById('timeSheetSelect').value);
-            const id = sheetSourceId;
-            closeTimeSheet();
-            await assign(id, selectedDate, start);
-        });
-
-        document.getElementById('timeSheetRemove').addEventListener('click', async () => {
-            const id = sheetSourceId;
-            closeTimeSheet();
-            await unassign(id);
-        });
+        // 배정과 시각 변경은 전부 타임테이블 드래그로만 한다. 바인딩할 게 없다.
     }
 
     function show() {
@@ -240,7 +222,6 @@ window.ViewPlan = (function () {
             document.querySelector('[data-datestrip="plan"]'),
             days(),
             selectedDate,
-            (date) => window.SOURCES.filter((s) => s.scheduledDate === date).length,
             (date) => {
                 selectedDate = date;
                 // 날짜가 바뀌면 이전 날짜의 저장 안 된 초안을 들고 가면 안 된다
@@ -268,9 +249,13 @@ window.ViewPlan = (function () {
         renderRail();
         renderTimetable();
 
+        // 다른 날 일정은 찍지 않는다. 오늘 어디를 넣을지 보는 데 방해만 된다.
+        // 미배정은 빈 원, 오늘 일정은 시각순 번호가 붙은 채운 원으로 나뉜다.
+        const today = scheduledOn(selectedDate);
         window.MapView.clear();
-        window.MapView.showPins(window.SOURCES, false);
-        window.MapView.showRoute(scheduledOn(selectedDate));
+        window.MapView.showPins(unscheduled(), false);
+        window.MapView.showPins(today, true);
+        window.MapView.showRoute(today);
     }
 
     /** 지도를 움직이면 왼쪽 레일만 다시 걸러진다. 전체를 다시 그리면 스크롤이 튄다. */

@@ -105,7 +105,6 @@ window.ViewDay = (function () {
             document.querySelector('[data-datestrip="day"]'),
             days(),
             selectedDate,
-            (date) => scheduledOn(date).length,
             (date) => { selectedDate = date; show(); }
         );
 

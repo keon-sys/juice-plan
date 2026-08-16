@@ -100,22 +100,26 @@ window.ViewAdd = (function () {
         shown.forEach((s) => {
             const card = document.createElement('div');
             card.className = 'card source-card';
+            // 버튼을 설명 아래에 깔면 카드마다 한 줄씩 높이를 더 먹는다.
+            // 오른쪽 끝에 붙이면 설명 높이 안에 들어가 목록이 훨씬 짧아진다.
             card.innerHTML =
-                `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">` +
-                    `<span class="badge ${s.placeType === 'RESTAURANT' ? 'badge--food' : 'badge--attraction'}">` +
-                    `${s.placeType === 'RESTAURANT' ? '🍴 음식점' : '📍 관광지'}</span>` +
-                    `<strong>${escapeHtml(s.name)}</strong>` +
+                `<div class="source-card__body">` +
+                    `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">` +
+                        `<span class="badge ${s.placeType === 'RESTAURANT' ? 'badge--food' : 'badge--attraction'}">` +
+                        `${s.placeType === 'RESTAURANT' ? '🍴 음식점' : '📍 관광지'}</span>` +
+                        `<strong>${escapeHtml(s.name)}</strong>` +
+                    `</div>` +
+                    `<div class="muted" style="margin-top:4px;">${s.durationMinutes}분 · ` +
+                        (s.scheduledDate
+                            ? `${s.scheduledDate} ${clockLabel(s.startMinutes)}`
+                            : '미배정') +
+                    `</div>` +
+                    (s.reservationRequired
+                        ? `<div class="badge badge--reservation" style="margin-top:8px;">🔔 예약 마감 ${s.reservationDeadline || '-'}</div>`
+                        : '') +
+                    (s.memo ? `<p class="muted" style="white-space:pre-wrap; margin:8px 0 0;">${escapeHtml(s.memo)}</p>` : '') +
                 `</div>` +
-                `<div class="muted" style="margin-top:4px;">${s.durationMinutes}분 · ` +
-                    (s.scheduledDate
-                        ? `${s.scheduledDate} ${clockLabel(s.startMinutes)}`
-                        : '미배정') +
-                `</div>` +
-                (s.reservationRequired
-                    ? `<div class="badge badge--reservation" style="margin-top:8px;">🔔 예약 마감 ${s.reservationDeadline || '-'}</div>`
-                    : '') +
-                (s.memo ? `<p class="muted" style="white-space:pre-wrap; margin:8px 0 0;">${escapeHtml(s.memo)}</p>` : '') +
-                `<div style="display:flex; gap:8px; margin-top:12px;">` +
+                `<div class="source-card__actions">` +
                     `<button type="button" class="btn" data-act="edit">수정</button>` +
                     `<button type="button" class="btn btn--danger" data-act="delete">삭제</button>` +
                 `</div>`;

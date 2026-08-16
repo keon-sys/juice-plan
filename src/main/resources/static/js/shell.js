@@ -1,5 +1,6 @@
 (function () {
-    const MAP_HEIGHT = 200;   // style.css 의 #map-panel height 와 같아야 한다
+    const MAP_PEEK = 200;     // style.css 의 #sheet-area top(--map-h) 과 같아야 한다
+    const HANDLE_PEEK = 52;   // 시트를 끝까지 내렸을 때 남겨둘 손잡이 높이
     const TABS = ['add', 'plan', 'day'];
     const DEFAULT_TAB = 'day';
 
@@ -7,7 +8,6 @@
     const handle = document.getElementById('map-handle');
 
     let current = null;
-    let collapsed = false;    // true = 뷰가 지도를 덮은 상태
 
     const VIEWS = {
         add: window.ViewAdd,
@@ -15,45 +15,79 @@
         day: window.ViewDay,
     };
 
-    // ---- 지도 접기 ----
-    // 지도를 display:none 하거나 높이를 0으로 만들지 않는다. 구글맵은 크기가 0이 되면
-    // 타일 로딩이 깨진다. 대신 뷰 영역을 위로 올려 덮는다.
-    function applyOffset(px, animate) {
-        sheetArea.style.transition = animate ? 'transform .25s ease' : 'none';
-        sheetArea.style.transform = `translateY(${px}px)`;
+    // ---- 지도 3단 핸들 ----
+    // 지도는 화면 전체에 깔려 있고 시트가 그 위를 덮는다. 지도 엘리먼트 자체는
+    // 크기가 변하지 않는다. 구글맵은 크기가 0이 되면 타일 로딩이 깨지기 때문이다.
+    //
+    // 시트는 바닥이 탭바에 고정된 채 윗변(top)만 움직인다. 단계가 올라갈수록
+    // 시트가 길어지고 지도가 덜 보인다.
+    //   3단계 = 시트가 화면을 다 덮음
+    //   2단계 = 지도 위쪽 200px 띠만 보임 (기본)
+    //   1단계 = 손잡이만 남고 지도가 화면 전체
+    const STEPS = [3, 2, 1];
+    let step = 2;
+
+    /** 시트 바닥과 화면 바닥 사이 거리(탭바 + 안전영역). CSS 로 고정돼 변하지 않는다. */
+    function bottomInset() {
+        return Math.max(0, window.innerHeight - sheetArea.getBoundingClientRect().bottom);
     }
 
-    function setCollapsed(next) {
-        collapsed = next;
-        applyOffset(collapsed ? -MAP_HEIGHT : 0, true);
-        handle.setAttribute('aria-label', collapsed ? '지도 펴기' : '지도 접기');
-        if (!collapsed) {
-            // 다시 보이게 됐을 때 타일이 깨지지 않도록 알린다
-            setTimeout(() => window.MapView.refresh(), 260);
-        }
+    /** 각 단계에서 시트 윗변의 화면 좌표(px). */
+    function topOf(n) {
+        if (n === 3) return 0;
+        if (n === 2) return MAP_PEEK;
+        return Math.max(MAP_PEEK, window.innerHeight - bottomInset() - HANDLE_PEEK);
     }
 
-    let dragStartOffset = 0;
+    function applyTop(px, animate) {
+        sheetArea.style.transition = animate ? 'top .25s ease' : 'none';
+        sheetArea.style.top = px + 'px';
+    }
+
+    function setStep(next) {
+        step = next;
+        const top = topOf(step);
+        applyTop(top, true);
+        // 시트에 가린 지도 아래쪽 높이를 알려준다. 지도는 그만큼 핀을 위로 올린다.
+        window.MapView.setHiddenBottom(window.innerHeight - top);
+        handle.setAttribute('aria-label',
+            step === 3 ? '지도 보기' : step === 2 ? '지도 크게 보기' : '지도 접기');
+        // 보이는 지도 범위가 달라졌으므로 미배정 레일도 다시 나눈다
+        if (current === 'plan') window.ViewPlan.onBoundsChanged();
+    }
+
+    /** 드래그를 놓은 위치에서 가장 가까운 단계로 붙인다. */
+    function nearestStep(top) {
+        return STEPS.reduce((best, n) =>
+            Math.abs(topOf(n) - top) < Math.abs(topOf(best) - top) ? n : best);
+    }
+
+    let dragStartTop = 0;
     let dragOriginY = 0;
 
-    function offsetDuring(clientY) {
-        const next = dragStartOffset + (clientY - dragOriginY);
-        return Math.max(-MAP_HEIGHT, Math.min(0, next));
+    function topDuring(clientY) {
+        const next = dragStartTop + (clientY - dragOriginY);
+        return Math.max(topOf(3), Math.min(topOf(1), next));
     }
 
     window.DragDrop.makeDraggable(handle, {
         data: null,
         noGhost: true,
         onStart: (_, startX, startY) => {
-            dragStartOffset = collapsed ? -MAP_HEIGHT : 0;
+            dragStartTop = topOf(step);
             dragOriginY = startY;
         },
-        onMove: (_, x, y) => applyOffset(offsetDuring(y), false),
-        // 절반을 넘겼는지로 붙일 쪽을 정한다
-        onDrop: (_, x, y) => setCollapsed(offsetDuring(y) < -MAP_HEIGHT / 2),
-        onCancel: () => setCollapsed(collapsed),
-        onTap: () => setCollapsed(!collapsed),
+        // 끄는 동안은 시트만 따라온다. 지도를 매 프레임 옮기면 눈이 어지럽고,
+        // 손을 뗄 때 setStep 이 한 번에 맞춰준다.
+        onMove: (_, x, y) => applyTop(topDuring(y), false),
+        onDrop: (_, x, y) => setStep(nearestStep(topDuring(y))),
+        onCancel: () => setStep(step),
+        // 탭은 3 → 2 → 1 → 3 으로 한 칸씩 내려간다
+        onTap: () => setStep(STEPS[(STEPS.indexOf(step) + 1) % STEPS.length]),
     });
+
+    // 주소창이 접히거나 화면이 돌아가면 1단계 위치와 지도 여백이 달라진다
+    window.addEventListener('resize', () => setStep(step));
 
     // ---- 해시 라우팅 ----
     function tabFromHash() {
@@ -103,5 +137,6 @@
 
     // 각 뷰의 한 번뿐인 초기화(이벤트 바인딩)를 먼저 돌린다
     Object.values(VIEWS).forEach((v) => v.init());
+    setStep(step);   // 시작 위치를 잡고 지도에 가려진 높이를 알려준다
     route();
 })();

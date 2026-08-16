@@ -237,7 +237,7 @@ class AuthServiceTest {
         every { repository.count() } returns 0
         every { repository.save(any()) } answers { firstArg() }
 
-        authService.setInitialPassword("250707")
+        authService.setInitialPassword("test-password")
 
         verify {
             repository.save(match { it.passwordHash.startsWith("$2a$") || it.passwordHash.startsWith("$2b$") })
@@ -248,23 +248,23 @@ class AuthServiceTest {
     fun `setInitialPassword throws if already configured`() {
         every { repository.count() } returns 1
         assertThrows<IllegalStateException> {
-            authService.setInitialPassword("250707")
+            authService.setInitialPassword("test-password")
         }
     }
 
     @Test
     fun `verify returns true for correct password`() {
         val encoder = BCryptPasswordEncoder()
-        val settings = AppSettings(id = 1, passwordHash = encoder.encode("250707"))
+        val settings = AppSettings(id = 1, passwordHash = encoder.encode("test-password"))
         every { repository.findAll() } returns listOf(settings)
 
-        assertTrue(authService.verify("250707"))
+        assertTrue(authService.verify("test-password"))
     }
 
     @Test
     fun `verify returns false for incorrect password`() {
         val encoder = BCryptPasswordEncoder()
-        val settings = AppSettings(id = 1, passwordHash = encoder.encode("250707"))
+        val settings = AppSettings(id = 1, passwordHash = encoder.encode("test-password"))
         every { repository.findAll() } returns listOf(settings)
 
         assertFalse(authService.verify("wrong"))
@@ -522,7 +522,7 @@ class AuthFlowIntegrationTest {
     @Test
     fun `setting initial password authenticates and redirects to sources`() {
         val result = mockMvc.perform(
-            post("/setup").param("password", "250707").param("passwordConfirm", "250707")
+            post("/setup").param("password", "test-password").param("passwordConfirm", "test-password")
         )
             .andExpect(status().is3xxRedirection)
             .andExpect(redirectedUrl("/sources"))
@@ -534,7 +534,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     fun `shows login page once password is configured`() {
-        appSettingsRepository.save(AppSettings(passwordHash = BCryptPasswordEncoder().encode("250707")))
+        appSettingsRepository.save(AppSettings(passwordHash = BCryptPasswordEncoder().encode("test-password")))
 
         mockMvc.perform(get("/"))
             .andExpect(status().isOk)
@@ -543,7 +543,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     fun `wrong password on login shows error`() {
-        appSettingsRepository.save(AppSettings(passwordHash = BCryptPasswordEncoder().encode("250707")))
+        appSettingsRepository.save(AppSettings(passwordHash = BCryptPasswordEncoder().encode("test-password")))
 
         mockMvc.perform(post("/login").param("password", "wrong"))
             .andExpect(status().isOk)
@@ -2856,7 +2856,7 @@ git commit -m "feat: add plan page controller with embedded sources and day note
 Run: `GOOGLE_MAPS_API_KEY=<발급받은 키> ./gradlew bootRun`
 
 브라우저에서 `http://localhost:8080` 접속 후 다음을 확인한다:
-1. 최초 비밀번호(`250707`)를 설정하고 `/sources`로 자동 이동하는지 확인.
+1. 최초 비밀번호(임의의 값)를 설정하고 `/sources`로 자동 이동하는지 확인.
 2. `/sources`에서 여행 기간을 설정하고, 구글맵 공유 링크로 소스를 2~3개 등록(비고도 하나 입력)한 뒤(또는 파싱 실패 시 수동으로 이름/좌표 입력) 목록에 비고까지 나타나는지 확인.
 3. 풋터 탭으로 `/plan`으로 이동 — 지도에 등록한 소스들의 마커가 표시되는지 확인.
 4. 가용 목록의 항목을 클릭하면 지도가 해당 위치로 이동하고 마커가 바운스되는지 확인.

@@ -42,6 +42,32 @@ window.ViewSummary = (function () {
             '</div>';
     }
 
+    function chartHtml(summary) {
+        const slices = summary.rows
+            .filter((r) => r.convertedKrw > 0)
+            .map((r) => ({
+                label: T().categoryLabel(r.category),
+                value: r.convertedKrw,
+                token: T().categoryToken(r.category),
+            }));
+
+        if (slices.length === 0) {
+            return '<p class="card muted">아직 금액이 없습니다. 지출 내역에서 금액을 넣으면 비중이 보입니다.</p>';
+        }
+
+        const total = summary.convertedTotalKrw;
+        const legend = slices.map((s) =>
+            '<span class="donut-legend__item">' +
+            `<i class="donut-legend__dot" style="background: var(${s.token})"></i>` +
+            `${s.label} ${Math.round((s.value / total) * 100)}%` +
+            '</span>').join('');
+
+        return '<div class="card budget-chart">' +
+            window.Donut.svg(slices, T().money('KRW', total)) +
+            `<div class="donut-legend">${legend}</div>` +
+            '</div>';
+    }
+
     async function saveRate(value) {
         const errorEl = document.getElementById('rateError');
         errorEl.hidden = true;
@@ -64,7 +90,7 @@ window.ViewSummary = (function () {
     function show() {
         const summary = window.BUDGET_SUMMARY;
         document.getElementById('view-summary').innerHTML =
-            rateHtml(summary) + `<div class="card">${tableHtml(summary)}</div>`;
+            rateHtml(summary) + chartHtml(summary) + `<div class="card">${tableHtml(summary)}</div>`;
     }
 
     return { init, show };

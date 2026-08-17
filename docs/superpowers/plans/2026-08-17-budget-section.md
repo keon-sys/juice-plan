@@ -1178,6 +1178,7 @@ package com.juiceplan.budget
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
@@ -1189,6 +1190,15 @@ class BudgetServiceTest {
 
     @Autowired lateinit var budgetService: BudgetService
     @Autowired lateinit var itemRepository: BudgetItemRepository
+    @Autowired lateinit var settingRepository: BudgetSettingRepository
+
+    // 테스트용 H2 는 DB_CLOSE_DELAY=-1 이라 이 JVM 의 모든 스프링 컨텍스트가 같은 DB 를 쓴다.
+    // @SpringBootTest 가 커밋한 설정 행이 남아 있으면 기본 환율 테스트가 그 값을 본다.
+    @BeforeEach
+    fun clearBudget() {
+        itemRepository.deleteAll()
+        settingRepository.deleteAll()
+    }
 
     private fun input(
         name: String = "테스트 지출",
@@ -1627,11 +1637,15 @@ class BudgetSeederTest {
 
     @Autowired lateinit var seeder: BudgetSeeder
     @Autowired lateinit var itemRepository: BudgetItemRepository
+    @Autowired lateinit var settingRepository: BudgetSettingRepository
     @Autowired lateinit var budgetService: BudgetService
 
+    // 같은 JVM 의 @SpringBootTest 가 커밋해 둔 항목·설정이 남아 있을 수 있다.
+    // 시드는 "비어 있을 때만" 도는 게 핵심이라 빈 상태에서 출발해야 한다.
     @BeforeEach
     fun setUp() {
         itemRepository.deleteAll()
+        settingRepository.deleteAll()
     }
 
     @Test
@@ -1752,7 +1766,7 @@ class BudgetSeeder(
             settingRepository.save(BudgetSetting(ratePer100Jpy = DEFAULT_RATE_PER_100_JPY))
         }
         if (itemRepository.count() > 0L) return
-        itemRepository.saveAll(INITIAL_ITEMS())
+        itemRepository.saveAll(initialItems())
     }
 }
 
@@ -1777,7 +1791,7 @@ private fun item(
 /** 식비는 "몇 끼를 어떤 수단으로 낼지"만 잡아둔 자리라 이름과 금액이 비어 있다. */
 private fun meal(paymentMethod: PaymentMethod) = item("", FOOD, paymentMethod, JPY, 0, PENDING)
 
-private fun INITIAL_ITEMS(): List<BudgetItem> = listOf(
+private fun initialItems(): List<BudgetItem> = listOf(
     item("왕복 항공권 (2인)", FLIGHT, CREDIT_CARD, KRW, 853_800, NOT_APPLICABLE, "이스타항공 사전 결제 완료(각자 결제)"),
     item("코코 호텔 스스키노 (5박, 2인)", HOTEL, CREDIT_CARD, KRW, 0, PENDING, "조식 미포함, 스스키노역 근처"),
     item("신치토세공항-스스키노 왕복 교통 (2인)", TRANSIT, TRAVEL_LOG, JPY, 5_440, PENDING, "JR 쾌속에어포트 + 지하철"),

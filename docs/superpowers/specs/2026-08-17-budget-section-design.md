@@ -139,13 +139,21 @@ class BudgetItem(
 @Entity
 class BudgetSetting(
     @Id val id: Long = 1,              // 항상 한 행
-    var jpyToKrwRate: BigDecimal       // 1엔당 원. 기본 9.0
+    var ratePer100Jpy: Int             // 100엔당 원. 기본 900
 )
 ```
 
 테이블 이름은 `BUDGET_SETTING`이다. 예전 인증이 쓰던 `APP_SETTINGS`는 `SchemaMigration.dropAppSettings()`가 매 부팅마다 `DROP TABLE IF EXISTS`로 지우므로 그 이름은 절대 재사용하지 않는다.
 
-`BigDecimal`을 쓰는 이유는 `9.0` 같은 값을 곱했을 때 `Double`의 오차로 원 단위가 흔들리지 않게 하려는 것이다.
+**단위는 화면·API·DB 전부 "100엔당 원"인 정수 하나다.** 사람이 환율을 말할 때 쓰는 단위가 그대로 저장되므로 어디서도 단위를 바꿔 담을 일이 없다. 환산은 정수·`BigDecimal` 연산이라 `Double` 오차가 끼지 않는다.
+
+```kotlin
+fun jpyToKrw(jpy: Int, ratePer100Jpy: Int): Int =
+    BigDecimal(jpy).multiply(BigDecimal(ratePer100Jpy))
+        .divide(BigDecimal(100))
+        .setScale(0, RoundingMode.HALF_UP)
+        .toInt()
+```
 
 ---
 
@@ -158,7 +166,7 @@ class BudgetSetting(
 - 카테고리 합계는 **통화별로 따로** 낸다. 한 카테고리에 엔·원이 섞이면 두 값을 모두 갖는다.
 - 1인당 = 그 통화의 2인 합계 ÷ 2, 나머지는 버린다(내림).
 - 환율은 **총액 한 줄과 파이차트 비중 계산에만** 쓴다.
-  - 환산 총액 = `KRW 합계 + round(JPY 합계 × rate)`
+  - 환산 총액 = `KRW 합계 + jpyToKrw(JPY 합계, rate)`
   - 차트 비중 = 카테고리별 환산 원화 / 환산 총액
 
 카테고리 단위로 먼저 환산한 뒤 더한다. 항목마다 반올림하면 카테고리 합계와 총액이 1원씩 어긋난다.
@@ -166,43 +174,57 @@ class BudgetSetting(
 환산 총액이 0이면 차트를 그리지 않고 "아직 금액이 없습니다"를 보여준다.
 
 ```kotlin
+/** 통화별 2인 총액. 한 카테고리에 엔·원이 섞이면 둘 다 0이 아니다. */
+data class Money(val jpy: Int, val krw: Int)
+
 data class CategoryTotal(
     val category: BudgetCategory,
     val count: Int,
-    val jpy: Int,
-    val krw: Int
+    val currencies: List<Currency>, // 이 카테고리에 실제로 쓰인 결제 통화
+    val total: Money,
+    val perPerson: Money,
+    val convertedKrw: Int           // 차트 비중용
 )
 
 data class BudgetSummary(
-    val rows: List<CategoryTotal>,     // 항목이 0건인 카테고리는 뺀다
-    val total: CategoryTotal,
-    val rate: BigDecimal,
-    val convertedTotalKrw: Int
+    val rows: List<CategoryTotal>,  // 항목이 0건인 카테고리는 뺀다
+    val count: Int,
+    val currencies: List<Currency>,
+    val total: Money,
+    val perPerson: Money,
+    val ratePer100Jpy: Int,
+    val convertedTotalKrw: Int,
+    val convertedPerPersonKrw: Int
 )
 ```
+
+`currencies`가 따로 필요한 이유는 금액이 전부 0인 카테고리 때문이다. 식비 10건이 모두 엔화 0원이면 `Money(0, 0)`만으로는 `¥0`으로 적을지 `₩0`으로 적을지 알 수 없다. 어떤 통화가 쓰였는지는 합계가 아니라 항목이 안다.
 
 ---
 
 ## 4. API
 
-페이지 첫 로드에서는 API를 부르지 않는다. `shell/index.html`이 `SOURCES`를 인라인으로 받는 것과 같이, `budget/index.html`도 `BUDGET_ITEMS`와 `BUDGET_RATE`를 인라인 스크립트로 받는다.
+페이지 첫 로드에서는 API를 부르지 않는다. `shell/index.html`이 `SOURCES`를 인라인으로 받는 것과 같이, `budget/index.html`도 `BUDGET_ITEMS`와 `BUDGET_SUMMARY`를 인라인 스크립트로 받는다.
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
+| `GET` | `/api/budget/summary` | 요약 다시 계산 |
 | `POST` | `/api/budget/items` | 추가. 저장된 항목을 돌려준다 |
 | `PUT` | `/api/budget/items/{id}` | 수정 |
 | `DELETE` | `/api/budget/items/{id}` | 삭제 |
-| `PUT` | `/api/budget/rate` | 환율 변경 |
+| `PUT` | `/api/budget/rate` | 환율 변경. 새 요약을 돌려준다 |
 
-응답으로 항목을 돌려주는 이유는 `SourceController`와 같다 — 클라이언트가 생성된 `id`를 알아야 목록에 넣고 이후 수정·삭제를 걸 수 있다.
+항목 응답으로 엔티티를 돌려주는 이유는 `SourceController`와 같다 — 클라이언트가 생성된 `id`를 알아야 목록에 넣고 이후 수정·삭제를 걸 수 있다.
 
-요약은 API로 내지 않는다. 항목 목록만 있으면 클라이언트가 같은 규칙으로 계산할 수 있고, 항목을 고칠 때마다 왕복이 한 번 더 생기는 걸 피한다. 계산 규칙은 서버(`BudgetTotals`)와 클라이언트(`budget-summary.js`) 양쪽에 있게 되지만, 서버 쪽은 테스트가 지키고 클라이언트 쪽은 화면이 바로 드러낸다.
+**합계는 서버만 계산한다.** 항목을 고친 뒤에는 `GET /api/budget/summary`로 다시 받아온다. 왕복이 한 번 늘지만, 3절의 계산 규칙(통화별 분리, 내림, 카테고리 단위 환산)이 JS에 복제되지 않는다. 이 프로젝트에는 JS 테스트 장치가 없으므로, 복제된 쪽은 아무도 지켜주지 않는다.
+
+카드에 찍는 항목별 1인당 금액(`amount / 2`)만 JS가 직접 나눈다. 나눗셈 한 번이라 복제로 치지 않는다.
 
 ### 검증
 
 - `amount` < 0 이면 400
 - `name`은 공백만 있어도 통과(빈 이름 허용). 앞뒤 공백은 잘라 저장한다
-- `jpyToKrwRate` <= 0 이면 400
+- `ratePer100Jpy` <= 0 이면 400
 - 없는 `id` 수정·삭제는 404
 
 에러 본문은 기존 API와 같은 `{"error":"..."}` 모양이라 `Api.send`가 메시지를 그대로 띄운다.
@@ -225,7 +247,7 @@ data class BudgetSummary(
 └────────────────────────────────┘
 ```
 
-환율은 `100엔 = ₩___` 형태로 받는다. 사람이 환율을 말할 때 쓰는 단위이고, `0.09` 같은 소수를 넣게 하는 것보다 오타가 덜 난다. 저장은 1엔당 값(`900 / 100 = 9.0`)이다.
+환율은 `100엔 = ₩___` 형태로 받는다. 사람이 환율을 말할 때 쓰는 단위이고, `0.09` 같은 소수를 넣게 하는 것보다 오타가 덜 난다. 화면에 넣은 정수가 그대로 저장된다.
 
 도넛은 외부 라이브러리 없이 인라인 SVG로 그린다. 이 프로젝트가 구글맵 말고는 CDN을 쓰지 않는다는 원칙과 맞고, 색은 `style.css`의 디자인 토큰을 그대로 쓸 수 있어 다크모드가 저절로 따라온다. 카테고리 7개용 색 토큰(`--cat-flight` 등)을 토큰 블록에 추가한다.
 
@@ -302,7 +324,7 @@ data class BudgetSummary(
 
 ## 8. 초기 데이터
 
-`BudgetSeeder`(`ApplicationRunner`)가 `BUDGET_ITEM`이 **비어 있을 때만** 21개 항목과 환율 9.0을 넣는다. `SchemaMigration`과 같은 패턴이라 몇 번을 띄워도 안전하고, 사람이 지운 항목이 되살아나지 않는다.
+`BudgetSeeder`(`ApplicationRunner`)가 `BUDGET_ITEM`이 **비어 있을 때만** 21개 항목과 환율 900(100엔 = ₩900)을 넣는다. `SchemaMigration`과 같은 패턴이라 몇 번을 띄워도 안전하고, 사람이 지운 항목이 되살아나지 않는다.
 
 금액이 0인 항목의 통화는 **앞으로 실제로 결제할 통화**로 넣는다. 일본에서 쓸 식비·쇼핑은 엔화, 한국에서 결제하는 숙박·eSIM·보험은 원화다. 금액이 0이라 어떤 합계도 달라지지 않고, 화면에서 바로 고칠 수 있다.
 
@@ -383,7 +405,7 @@ TDD로 간다. 각 항목은 실패하는 테스트를 먼저 쓴다.
 
 - 카테고리별 건수·통화별 합계가 5절 표와 일치
 - 1인당은 내림 (`¥1,041 → ¥520`)
-- 환율 9.0에서 환산 총액 `₩1,007,520`, 1인 `₩503,760`
+- 환율 900에서 환산 총액 `₩1,007,520`, 1인 `₩503,760`
 - 엔·원이 섞인 카테고리가 두 통화 값을 모두 갖는다
 - 항목이 0건인 카테고리는 행에 없다
 - 총액 0이면 차트 비중을 계산하지 않는다 (0으로 나누지 않는다)
@@ -421,5 +443,4 @@ TDD로 간다. 각 항목은 실패하는 테스트를 먼저 쓴다.
 ## 11. 위험
 
 - **탭바 프래그먼트 교체가 셸을 건드린다.** `shell.js`가 `footer nav a[data-tab]`로 링크를 찾으므로 프래그먼트가 그 속성을 반드시 내야 한다. 화살표에는 그 속성이 없어야 한다. 통합 테스트로 `/schd/day` 응답에 세 탭 링크가 있는지 확인한다.
-- **계산 규칙이 서버와 클라이언트에 각각 있다.** 4절에 적은 이유로 감수한다. 규칙이 더 복잡해지면 `/api/budget/summary`를 만들어 한쪽으로 모은다.
-- **환율 입력 단위 혼동.** 화면은 100엔당, 저장은 1엔당이다. 변환은 한 함수에만 두고 테스트한다.
+- **항목을 고칠 때마다 요약을 다시 받아온다.** 왕복이 한 번 늘지만 계산이 한 곳에만 있는 값이 더 크다. 느껴질 만큼 느리면 변경 API가 새 요약을 함께 돌려주도록 바꾼다.

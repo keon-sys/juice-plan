@@ -1,6 +1,7 @@
 (function () {
-    const MAP_PEEK = 200;     // style.css 의 #sheet-area top(--map-h) 과 같아야 한다
-    const HANDLE_PEEK = 52;   // 시트를 끝까지 내렸을 때 남겨둘 손잡이 높이
+    const MID_RATIO = .5;     // 2단계에서 시트가 차지하는 화면 비율 — style.css 의 --sheet-mid 와 같아야 한다
+    const SHEET_PEEK = 88;    // 1단계에서 남겨둘 높이 — 손잡이(28) + 날짜 스트립(56) + 여백.
+                              // 날짜만 고를 수 있으면 되고 타임테이블은 보이지 않아야 한다.
     const TABS = ['add', 'plan', 'day'];
     const DEFAULT_TAB = 'day';
     const BASE = '/schd';      // ShellController 의 @GetMapping("/schd/{tab}") 과 같아야 한다
@@ -16,16 +17,17 @@
         day: window.ViewDay,
     };
 
-    // ---- 지도 3단 핸들 ----
+    // ---- 지도 2단 핸들 ----
     // 지도는 화면 전체에 깔려 있고 시트가 그 위를 덮는다. 지도 엘리먼트 자체는
     // 크기가 변하지 않는다. 구글맵은 크기가 0이 되면 타일 로딩이 깨지기 때문이다.
     //
     // 시트는 바닥이 탭바에 고정된 채 윗변(top)만 움직인다. 단계가 올라갈수록
     // 시트가 길어지고 지도가 덜 보인다.
-    //   3단계 = 시트가 화면을 다 덮음
-    //   2단계 = 지도 위쪽 200px 띠만 보임 (기본)
-    //   1단계 = 손잡이만 남고 지도가 화면 전체
-    const STEPS = [3, 2, 1];
+    //   2단계 = 화면 절반이 지도 (기본)
+    //   1단계 = 손잡이와 날짜 스트립만 남고 지도가 화면을 거의 다 차지
+    // 시트로 화면을 다 덮는 단은 두지 않는다. 지도를 완전히 가리면 그 아래에서
+    // 무엇을 옮기고 있는지 보이지 않는다.
+    const STEPS = [2, 1];
     let step = 2;
 
     /** 시트 바닥과 화면 바닥 사이 거리(탭바 + 안전영역). CSS 로 고정돼 변하지 않는다. */
@@ -35,9 +37,9 @@
 
     /** 각 단계에서 시트 윗변의 화면 좌표(px). */
     function topOf(n) {
-        if (n === 3) return 0;
-        if (n === 2) return MAP_PEEK;
-        return Math.max(MAP_PEEK, window.innerHeight - bottomInset() - HANDLE_PEEK);
+        if (n === 2) return Math.round(window.innerHeight * MID_RATIO);
+        // 화면이 아주 낮으면 1단계가 2단계보다 위로 올라갈 수 있다. 순서를 뒤집지 않는다.
+        return Math.max(topOf(2), window.innerHeight - bottomInset() - SHEET_PEEK);
     }
 
     function applyTop(px, animate) {
@@ -51,8 +53,7 @@
         applyTop(top, true);
         // 시트에 가린 지도 아래쪽 높이를 알려준다. 지도는 그만큼 핀을 위로 올린다.
         window.MapView.setHiddenBottom(window.innerHeight - top);
-        handle.setAttribute('aria-label',
-            step === 3 ? '지도 보기' : step === 2 ? '지도 크게 보기' : '지도 접기');
+        handle.setAttribute('aria-label', step === 2 ? '지도 크게 보기' : '일정 보기');
         // 보이는 지도 범위가 달라졌으므로 미배정 레일도 다시 나눈다
         if (current === 'plan') window.ViewPlan.onBoundsChanged();
     }
@@ -68,12 +69,14 @@
 
     function topDuring(clientY) {
         const next = dragStartTop + (clientY - dragOriginY);
-        return Math.max(topOf(3), Math.min(topOf(1), next));
+        return Math.max(topOf(2), Math.min(topOf(1), next));
     }
 
     window.DragDrop.makeDraggable(handle, {
         data: null,
         noGhost: true,
+        // 손잡이는 끄는 것 말고 할 일이 없다. 꾹 누르기를 기다리게 하면 굼떠 보인다.
+        instant: true,
         onStart: (_, startX, startY) => {
             dragStartTop = topOf(step);
             dragOriginY = startY;
@@ -83,7 +86,7 @@
         onMove: (_, x, y) => applyTop(topDuring(y), false),
         onDrop: (_, x, y) => setStep(nearestStep(topDuring(y))),
         onCancel: () => setStep(step),
-        // 탭은 3 → 2 → 1 → 3 으로 한 칸씩 내려간다
+        // 탭은 2 ↔ 1 을 오간다
         onTap: () => setStep(STEPS[(STEPS.indexOf(step) + 1) % STEPS.length]),
     });
 

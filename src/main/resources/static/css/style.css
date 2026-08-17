@@ -18,7 +18,7 @@
   --radius-sm: 10px;
   --slot-h: 28px;        /* 타임테이블 30분 슬롯 높이 — timegrid.js의 SLOT_H와 같아야 한다 */
   --tabbar-h: 56px;
-  --map-h: 200px;        /* 중간 단에서 드러나는 지도 띠의 높이 — shell.js의 MAP_PEEK과 같아야 한다 */
+  --sheet-mid: 40%;      /* 2단에서 시트가 시작하는 높이 — shell.js의 MID_RATIO와 같아야 한다 */
   --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
   --on-accent: #FFFFFF;  /* primary/장소 종류 색 배경 위의 글자색 */
 
@@ -280,24 +280,27 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
 }
 
+/* 꾹 눌러 집힌 원본. 손가락에 가려 고스트가 안 보여도 어느 것이 들렸는지 알 수 있다. */
+.drag-armed { opacity: .35; }
+
 /* ============================================================
-   셸 — 지도는 화면 전체에 깔려 있고, 시트가 그 위를 3단으로 오르내린다
+   셸 — 지도는 화면 전체에 깔려 있고, 시트가 그 위를 2단으로 오르내린다
    ============================================================ */
 
 /* 지도는 처음부터 화면 전체 크기다. 크기를 바꾸지 않기 때문에
-   구글맵 타일이 깨질 일이 없고, 시트는 그 위를 덮기만 하면 된다.
-   --map-h 는 이제 지도 높이가 아니라 '중간 단에서 드러나는 띠의 높이'다. */
+   구글맵 타일이 깨질 일이 없고, 시트는 그 위를 덮기만 하면 된다. */
 #map-panel {
   position: fixed; inset: 0; z-index: 0;
 }
 #map { height: 100%; width: 100%; }
 
 /* 시트는 바닥(탭바 위)에 고정된 채 윗변만 오르내린다.
-   transform 으로 통째로 밀면 높이가 그대로라 3단계에서 아래에 지도가 드러난다.
-   top 을 움직여야 시트가 실제로 늘어나 화면을 채운다. */
+   transform 으로 통째로 밀면 높이가 그대로라 아래에 지도가 드러난다.
+   top 을 움직여야 시트가 실제로 늘어난다. 여기 값은 shell.js 가 자리를 잡기 전
+   첫 화면용이고, 그 뒤로는 JS 가 px 로 덮어쓴다. */
 #sheet-area {
   position: fixed; z-index: 1;
-  top: var(--map-h);
+  top: var(--sheet-mid);
   left: 0; right: 0;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   background: var(--bg);

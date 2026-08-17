@@ -596,6 +596,14 @@ footer nav a.active { color: var(--primary); font-weight: 600; }
 .donut-legend__item { display: inline-flex; align-items: center; gap: 5px; }
 .donut-legend__dot { width: 9px; height: 9px; border-radius: 50%; }
 
+/* 카드를 누르면 편집 시트가 열린다는 걸 손끝에 알린다 */
+.budget-card { cursor: pointer; }
+
+.budget-amount { display: flex; align-items: center; gap: 12px; }
+.budget-amount__currency { display: flex; gap: 12px; flex: 0 0 auto; }
+.budget-amount input { flex: 1 1 auto; }
+#budgetPerPerson { margin: 6px 0 0; }
+
 /* ---- 로그인 ---- */
 /* body 가 100dvh/overflow:hidden 이므로 그 안에서 가운데로만 잡으면 된다 */
 .auth-page {

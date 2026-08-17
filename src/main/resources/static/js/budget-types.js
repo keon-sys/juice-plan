@@ -31,12 +31,15 @@ window.BudgetTypes = (function () {
     }
 
     /**
-     * 통화별 금액을 줄바꿈으로 쌓는다. 금액이 전부 0인 카테고리는 합계만 봐서는
-     * ¥0 인지 ₩0 인지 알 수 없어 서버가 준 currencies 를 따라간다.
+     * 통화별 금액을 줄바꿈으로 쌓는다. 0 인 통화는 접는다 — 엔·원이 섞인 카테고리에서
+     * 쓰지도 않은 쪽의 0 이 한 줄을 차지하면 읽는 눈이 헛돈다.
+     * 전부 0 인 카테고리는 접을 게 없으므로 실제로 쓰인 통화를 그대로 0 으로 보여준다.
+     * (합계만으로는 ¥0 인지 ₩0 인지 알 수 없어 서버가 currencies 를 함께 준다.)
      */
     function moneyLines(currencies, amounts) {
         if (!currencies || currencies.length === 0) return money('KRW', 0);
-        return currencies
+        const nonZero = currencies.filter((c) => (c === 'JPY' ? amounts.jpy : amounts.krw) !== 0);
+        return (nonZero.length ? nonZero : currencies)
             .map((c) => money(c, c === 'JPY' ? amounts.jpy : amounts.krw))
             .join('<br>');
     }
@@ -44,6 +47,7 @@ window.BudgetTypes = (function () {
     return {
         categoryLabel: (k) => category(k).label,
         categoryToken: (k) => category(k).token,
+        categoryOrder: Object.keys(CATEGORIES),
         method: (k) => METHODS[k] || k,
         settlementLabel: (k) => settlement(k).label,
         settlementClass: (k) => 'badge--settle-' + settlement(k).suffix,

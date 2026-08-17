@@ -29,6 +29,7 @@
             a.classList.toggle('active', a.dataset.tab === tab);
         });
         current = tab;
+        document.getElementById('addBudgetBtn').hidden = tab !== 'list';
         VIEWS[tab].show();
     }
 

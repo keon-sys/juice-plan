@@ -12,13 +12,14 @@ window.ViewSummary = (function () {
             '</tr>';
     }
 
+    // 빈 상태 메시지는 chartHtml() 이 이미 보여준다("아직 금액이 없습니다"). 여기서 또
+    // 카드를 내면 빈 예산 화면에 같은 뜻의 메시지가 두 번 뜬다.
     function tableHtml(summary) {
-        if (summary.rows.length === 0) {
-            return '<p class="card muted">아직 지출 항목이 없습니다.</p>';
-        }
-        return '<table class="budget-table">' +
-            '<thead><tr><th>카테고리</th><th class="num">건수</th>' +
-            '<th class="num">2인 합계</th><th class="num">1인당</th></tr></thead>' +
+        if (summary.rows.length === 0) return '';
+        return '<div class="card">' +
+            '<table class="budget-table">' +
+            '<thead><tr><th scope="col">카테고리</th><th scope="col" class="num">건수</th>' +
+            '<th scope="col" class="num">2인 합계</th><th scope="col" class="num">1인당</th></tr></thead>' +
             `<tbody>${summary.rows.map(rowHtml).join('')}</tbody>` +
             '<tfoot><tr>' +
                 '<th scope="row">합계</th>' +
@@ -26,9 +27,10 @@ window.ViewSummary = (function () {
                 `<td class="num">${T().moneyLines(summary.currencies, summary.total)}</td>` +
                 `<td class="num">${T().moneyLines(summary.currencies, summary.perPerson)}</td>` +
             '</tr></tfoot></table>' +
-            `<p class="muted budget-converted">100엔 = ₩${summary.ratePer100Jpy} 기준 ` +
+            `<p class="muted budget-converted">100엔 = ${T().money('KRW', summary.ratePer100Jpy)} 기준 ` +
             `<strong>대략 ${T().money('KRW', summary.convertedTotalKrw)}</strong>` +
-            ` · 1인 ${T().money('KRW', summary.convertedPerPersonKrw)}</p>`;
+            ` · 1인 ${T().money('KRW', summary.convertedPerPersonKrw)}</p>` +
+            '</div>';
     }
 
     function rateHtml(summary) {
@@ -73,7 +75,7 @@ window.ViewSummary = (function () {
         errorEl.hidden = true;
         try {
             window.BUDGET_SUMMARY = await window.Api.saveBudgetRate(Number(value));
-            show();
+            renderBody(window.BUDGET_SUMMARY);
         } catch (e) {
             errorEl.textContent = e.message;
             errorEl.hidden = false;
@@ -90,7 +92,15 @@ window.ViewSummary = (function () {
     function show() {
         const summary = window.BUDGET_SUMMARY;
         document.getElementById('view-summary').innerHTML =
-            rateHtml(summary) + chartHtml(summary) + `<div class="card">${tableHtml(summary)}</div>`;
+            rateHtml(summary) + '<div id="summary-body"></div>';
+        renderBody(summary);
+    }
+
+    /** 환율을 고쳐도 입력칸은 그대로 두고 아래만 다시 그린다. 통째로 다시 그리면
+        방금 손대던 입력칸이 사라져 모바일에서 키보드가 닫힌다. */
+    function renderBody(summary) {
+        document.getElementById('summary-body').innerHTML =
+            chartHtml(summary) + tableHtml(summary);
     }
 
     return { init, show };

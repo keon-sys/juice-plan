@@ -34,5 +34,8 @@ window.Api = (function () {
         parseLink: (url) => send('POST', '/api/sources/parse-link', { url }),
         budgetSummary: () => send('GET', '/api/budget/summary'),
         saveBudgetRate: (ratePer100Jpy) => send('PUT', '/api/budget/rate', { ratePer100Jpy }),
+        createBudgetItem: (payload) => send('POST', '/api/budget/items', payload),
+        updateBudgetItem: (id, payload) => send('PUT', `/api/budget/items/${id}`, payload),
+        deleteBudgetItem: (id) => send('DELETE', `/api/budget/items/${id}`),
     };
 })();

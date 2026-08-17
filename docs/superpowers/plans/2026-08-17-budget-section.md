@@ -2476,7 +2476,10 @@ git commit -m "feat: 카테고리 비중 도넛"
 <div class="sheet" id="budgetSheet">
     <h3 id="budgetSheetTitle">새 지출 추가</h3>
 
-    <form id="budgetForm">
+    <!-- 금액 규칙은 서버가 갖는다. 브라우저 기본 검증을 켜두면 음수를 넣었을 때
+         submit 자체가 막혀 서버의 400 메시지를 시트에 띄울 기회가 없어진다.
+         min="0" 은 스피너 화살표의 하한으로만 남긴다. -->
+    <form id="budgetForm" novalidate>
         <label for="budgetName">이름</label>
         <input type="text" id="budgetName" name="name" placeholder="예: 오타루 왕복 JR 열차 (2인)">
 

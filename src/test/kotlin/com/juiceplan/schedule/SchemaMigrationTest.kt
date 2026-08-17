@@ -1,6 +1,7 @@
 package com.juiceplan.schedule
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -145,6 +146,125 @@ class SchemaMigrationTest {
         migration.migrate()
 
         assertEquals(false, tableExists("APP_SETTINGS"))
+    }
+
+    /**
+     * 예전 DB 의 PLACE_TYPE 은 두 값짜리 H2 네이티브 ENUM 이라 새 종류를 거부한다.
+     * 테스트는 늘 새 스키마로 도니 그 상태를 손으로 만들어 준다.
+     *
+     * 지금 스키마에는 경유지까지 든 체크 제약이 붙어 있어, 먼저 떼지 않으면
+     * 두 값짜리 ENUM 으로 바꾸는 것 자체가 막힌다.
+     */
+    private fun makePlaceTypeANativeEnum() {
+        placeTypeCheckConstraints().forEach {
+            jdbcTemplate.execute("ALTER TABLE SOURCE DROP CONSTRAINT IF EXISTS \"$it\"")
+        }
+        jdbcTemplate.execute(
+            "ALTER TABLE SOURCE ALTER COLUMN PLACE_TYPE SET DATA TYPE ENUM('ATTRACTION','RESTAURANT')"
+        )
+    }
+
+    private fun placeTypeCheckConstraints(): List<String> =
+        jdbcTemplate.queryForList(
+            """
+            SELECT tc.CONSTRAINT_NAME
+            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc
+              ON cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+             AND cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+            WHERE tc.TABLE_NAME = 'SOURCE'
+              AND tc.CONSTRAINT_TYPE = 'CHECK'
+              AND cc.CHECK_CLAUSE LIKE '%PLACE_TYPE%'
+            """.trimIndent(),
+            String::class.java
+        )
+
+    private fun placeTypeDataType(): String =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = 'SOURCE' AND COLUMN_NAME = 'PLACE_TYPE'
+            """.trimIndent(),
+            String::class.java
+        )!!
+
+    private fun insertWaypoint() {
+        jdbcTemplate.update(
+            """
+            INSERT INTO SOURCE
+              (ID, GOOGLE_MAPS_URL, NAME, LATITUDE, LONGITUDE, PLACE_TYPE,
+               DURATION_MINUTES, RESERVATION_REQUIRED, SCHEDULED_DATE, START_MINUTES)
+            VALUES (99, 'https://maps.app.goo.gl/x', '환승역', 37.0, 127.0, 'WAYPOINT',
+                    30, FALSE, NULL, NULL)
+            """.trimIndent()
+        )
+    }
+
+    @Test
+    fun `converts the native enum place type column to a string column`() {
+        makePlaceTypeANativeEnum()
+        assertEquals("ENUM", placeTypeDataType())
+
+        migration.migrate()
+
+        assertEquals("CHARACTER VARYING", placeTypeDataType())
+    }
+
+    @Test
+    fun `a new place type can be saved after the conversion`() {
+        makePlaceTypeANativeEnum()
+        // 옮기기 전에는 예전 DB 그대로 거부한다
+        assertThrows(Exception::class.java) { insertWaypoint() }
+
+        migration.migrate()
+        insertWaypoint()
+
+        assertEquals(
+            "WAYPOINT",
+            jdbcTemplate.queryForObject("SELECT PLACE_TYPE FROM SOURCE WHERE ID = 99", String::class.java)
+        )
+    }
+
+    @Test
+    fun `keeps the values already stored in the enum column`() {
+        insert(1, "A", "2026-09-01", 0, 60)   // PLACE_TYPE = 'ATTRACTION'
+        makePlaceTypeANativeEnum()
+
+        migration.migrate()
+
+        assertEquals(
+            "ATTRACTION",
+            jdbcTemplate.queryForObject("SELECT PLACE_TYPE FROM SOURCE WHERE ID = 1", String::class.java)
+        )
+    }
+
+    @Test
+    fun `converting the place type column twice is safe`() {
+        makePlaceTypeANativeEnum()
+
+        migration.migrate()
+        migration.migrate()
+
+        assertEquals("CHARACTER VARYING", placeTypeDataType())
+    }
+
+    @Test
+    fun `drops the value list constraint so the next place type needs no migration`() {
+        // ENUM 이 아니라 체크 제약으로 값 목록을 묶어둔 DB 도 있다
+        migration.migrate()
+
+        assertEquals(emptyList<String>(), placeTypeCheckConstraints())
+
+        // 코드가 아직 모르는 값이라도 DB 는 더 이상 막지 않는다
+        jdbcTemplate.update(
+            """
+            INSERT INTO SOURCE
+              (ID, GOOGLE_MAPS_URL, NAME, LATITUDE, LONGITUDE, PLACE_TYPE,
+               DURATION_MINUTES, RESERVATION_REQUIRED, SCHEDULED_DATE, START_MINUTES)
+            VALUES (98, 'https://maps.app.goo.gl/x', '미래종류', 37.0, 127.0, 'SOMETHING_NEW',
+                    30, FALSE, NULL, NULL)
+            """.trimIndent()
+        )
     }
 
     private fun tableExists(name: String): Boolean =

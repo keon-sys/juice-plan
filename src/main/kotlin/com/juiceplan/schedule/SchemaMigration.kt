@@ -30,7 +30,57 @@ class SchemaMigration(private val jdbcTemplate: JdbcTemplate) : ApplicationRunne
     fun migrate() {
         migrateSortOrderToStartMinutes()
         dropAppSettings()
+        convertPlaceTypeToVarchar()
     }
+
+    /**
+     * PLACE_TYPE 에서 "쓸 수 있는 값 목록"을 걷어내 그냥 문자열 컬럼으로 만든다.
+     *
+     * Hibernate 는 enum 필드를 H2 에서 ENUM('ATTRACTION','RESTAURANT') 컬럼으로 만드는데,
+     * ddl-auto: update 는 이미 있는 컬럼의 값 목록을 넓히지 않는다. 그래서 코드에
+     * 종류(경유지)를 더해도 예전부터 쓰던 DB 는 새 값을 거부한다 — 저장할 때
+     * "Value not permitted for column" (22030) 이 난다.
+     *
+     * 목록을 늘려주는 것만으로는 종류를 더할 때마다 여기를 다시 고쳐야 한다.
+     * 아예 제약을 없애 다음번엔 손댈 일이 없게 한다. 값이 올바른지는 어차피
+     * 엔티티의 enum 이 지킨다.
+     *
+     * 새로 만드는 DB 는 엔티티의 @JdbcTypeCode(VARCHAR) 덕에 처음부터 문자열이고,
+     * Hibernate 가 붙이는 값 목록 체크 제약만 여기서 함께 떨어진다.
+     */
+    private fun convertPlaceTypeToVarchar() {
+        if (placeTypeIsNativeEnum()) {
+            jdbcTemplate.execute("ALTER TABLE SOURCE ALTER COLUMN PLACE_TYPE SET DATA TYPE VARCHAR(255)")
+        }
+        placeTypeCheckConstraints().forEach {
+            jdbcTemplate.execute("ALTER TABLE SOURCE DROP CONSTRAINT IF EXISTS \"$it\"")
+        }
+    }
+
+    private fun placeTypeIsNativeEnum(): Boolean =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = 'SOURCE' AND COLUMN_NAME = 'PLACE_TYPE' AND DATA_TYPE = 'ENUM'
+            """.trimIndent(),
+            Int::class.java
+        )!! > 0
+
+    /** PLACE_TYPE 을 값 목록으로 묶어두는 체크 제약의 이름들. 보통 하나뿐이다. */
+    private fun placeTypeCheckConstraints(): List<String> =
+        jdbcTemplate.queryForList(
+            """
+            SELECT tc.CONSTRAINT_NAME
+            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            JOIN INFORMATION_SCHEMA.CHECK_CONSTRAINTS cc
+              ON cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+             AND cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+            WHERE tc.TABLE_NAME = 'SOURCE'
+              AND tc.CONSTRAINT_TYPE = 'CHECK'
+              AND cc.CHECK_CLAUSE LIKE '%PLACE_TYPE%'
+            """.trimIndent(),
+            String::class.java
+        )
 
     /** 인증을 없앴으므로 비밀번호 해시를 담던 테이블을 지운다. */
     private fun dropAppSettings() {

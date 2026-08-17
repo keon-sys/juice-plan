@@ -6,6 +6,8 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.time.LocalDate
 
 /** 문자열로 저장하므로 값을 늘려도 기존 행을 손대지 않는다. */
@@ -22,7 +24,11 @@ class Source(
     var latitude: Double,
     var longitude: Double,
 
+    // Hibernate 는 H2 에서 enum 필드를 ENUM('A','B') 네이티브 컬럼으로 만드는데,
+    // ddl-auto: update 가 이미 있는 ENUM 의 값 목록을 넓혀주지 않는다. 그래서 종류를
+    // 하나 더하면 기존 DB 가 새 값을 거부한다. 처음부터 문자열로 저장한다.
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     var placeType: PlaceType,
 
     var durationMinutes: Int,

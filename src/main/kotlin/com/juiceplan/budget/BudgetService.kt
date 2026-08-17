@@ -26,7 +26,10 @@ class BudgetService(
     fun list(): List<BudgetItem> =
         itemRepository.findAll().sortedWith(compareBy({ it.category.ordinal }, { it.id }))
 
-    fun summary(): BudgetSummary = BudgetTotals.summarize(list(), rate())
+    fun summary(): BudgetSummary = summaryOf(list())
+
+    /** 이미 목록을 들고 있는 호출자가 같은 조회를 두 번 하지 않도록 열어 둔다. */
+    fun summaryOf(items: List<BudgetItem>): BudgetSummary = BudgetTotals.summarize(items, rate())
 
     fun rate(): Int = setting().ratePer100Jpy
 

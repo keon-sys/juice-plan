@@ -63,7 +63,7 @@ window.ViewList = (function () {
         editingId = item ? item.id : null;
         const f = form();
         f.reset();
-        document.getElementById('budgetError').style.display = 'none';
+        document.getElementById('budgetError').hidden = true;
 
         document.getElementById('budgetName').value = item ? item.name : '';
         document.getElementById('budgetCategory').value = item ? item.category : 'FOOD';
@@ -111,10 +111,19 @@ window.ViewList = (function () {
         window.BudgetSection.refresh();
     }
 
+    /** 서버는 카테고리 선언 순 → id 순으로 목록을 낸다(BudgetService.list 와 동일한 규칙).
+        수정으로 카테고리가 바뀐 항목은 배열 안 옛 자리에 그대로 남으므로, 화면 순서가
+        서버와 어긋나지 않도록 매 변경 뒤 같은 기준으로 다시 정렬해 둔다. */
+    function sortItems() {
+        const order = T().categoryOrder;
+        window.BUDGET_ITEMS.sort((a, b) =>
+            order.indexOf(a.category) - order.indexOf(b.category) || a.id - b.id);
+    }
+
     async function submit(e) {
         e.preventDefault();
         const errorEl = document.getElementById('budgetError');
-        errorEl.style.display = 'none';
+        errorEl.hidden = true;
 
         try {
             const payload = readForm();
@@ -125,11 +134,12 @@ window.ViewList = (function () {
                 const i = window.BUDGET_ITEMS.findIndex((it) => it.id === editingId);
                 window.BUDGET_ITEMS[i] = updated;
             }
+            sortItems();
             closeSheet();
             await reload();
         } catch (err) {
             errorEl.textContent = err.message;
-            errorEl.style.display = 'block';
+            errorEl.hidden = false;
         }
     }
 

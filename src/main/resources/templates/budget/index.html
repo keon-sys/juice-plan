@@ -46,7 +46,7 @@
             <option value="CASH">현금</option>
         </select>
 
-        <label>금액 (2인 총액)</label>
+        <label for="budgetAmount">금액 (2인 총액)</label>
         <div class="budget-amount">
             <div class="budget-amount__currency">
                 <label class="inline"><input type="radio" name="currency" value="JPY" checked> ¥ 엔</label>
@@ -66,7 +66,7 @@
         <label for="budgetMemo">비고</label>
         <textarea id="budgetMemo" name="memo" rows="2" placeholder="예: 지정석/자유석"></textarea>
 
-        <p id="budgetError" class="error" style="display:none; margin:8px 0 0;"></p>
+        <p id="budgetError" class="error" hidden style="margin:8px 0 0;"></p>
 
         <button type="submit" class="btn btn--primary btn--block" id="budgetSubmit" style="margin-top:16px;">저장</button>
         <button type="button" class="btn btn--danger btn--block" id="budgetDelete" style="margin-top:8px;" hidden>삭제</button>

@@ -17,8 +17,7 @@ class BudgetServiceTest {
     @Autowired lateinit var itemRepository: BudgetItemRepository
     @Autowired lateinit var settingRepository: BudgetSettingRepository
 
-    // 테스트용 H2 는 DB_CLOSE_DELAY=-1 이라 이 JVM 의 모든 스프링 컨텍스트가 같은 DB 를 쓴다.
-    // @SpringBootTest 가 커밋한 설정 행이 남아 있으면 기본 환율 테스트가 그 값을 본다.
+    // @DataJpaTest 는 테스트마다 롤백하지만, 시작 상태를 눈에 보이게 못박아 둔다.
     @BeforeEach
     fun clearBudget() {
         itemRepository.deleteAll()

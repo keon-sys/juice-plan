@@ -109,5 +109,6 @@ class BudgetApiIntegrationTest {
     fun `a non-positive rate is a 400`() {
         mockMvc.perform(put("/api/budget/rate").contentType(MediaType.APPLICATION_JSON).content("""{"ratePer100Jpy":0}"""))
             .andExpect(status().isBadRequest)
+            .andExpect(jsonPath("$.error").value("환율은 0보다 커야 합니다."))
     }
 }

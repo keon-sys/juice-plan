@@ -105,8 +105,8 @@ window.ViewAdd = (function () {
             card.innerHTML =
                 `<div class="source-card__body">` +
                     `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">` +
-                        `<span class="badge ${s.placeType === 'RESTAURANT' ? 'badge--food' : 'badge--attraction'}">` +
-                        `${s.placeType === 'RESTAURANT' ? '🍴 음식점' : '📍 관광지'}</span>` +
+                        `<span class="badge ${window.PlaceTypes.badgeClass(s.placeType)}">` +
+                        `${window.PlaceTypes.tag(s.placeType)}</span>` +
                         `<strong>${escapeHtml(s.name)}</strong>` +
                     `</div>` +
                     `<div class="muted" style="margin-top:4px;">${s.durationMinutes}분 · ` +

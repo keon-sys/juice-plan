@@ -8,7 +8,8 @@ import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import java.time.LocalDate
 
-enum class PlaceType { RESTAURANT, ATTRACTION }
+/** 문자열로 저장하므로 값을 늘려도 기존 행을 손대지 않는다. */
+enum class PlaceType { RESTAURANT, ATTRACTION, WAYPOINT }
 
 @Entity
 class Source(

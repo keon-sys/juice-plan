@@ -37,18 +37,34 @@ class ShellControllerIntegrationTest {
     }
 
     @Test
-    fun `renders the shell`() {
-        mockMvc.perform(get("/"))
-            .andExpect(status().isOk)
-            .andExpect(view().name("shell/index"))
+    fun `renders the same shell for every tab path`() {
+        listOf("/schd/add", "/schd/plan", "/schd/day").forEach { path ->
+            mockMvc.perform(get(path))
+                .andExpect(status().isOk)
+                .andExpect(view().name("shell/index"))
+        }
     }
 
     @Test
     fun `no login is required`() {
         // 인증을 제거했으므로 세션 없이 바로 200이어야 한다
-        mockMvc.perform(get("/"))
+        mockMvc.perform(get("/schd/day"))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("장소 추가")))
+    }
+
+    @Test
+    fun `redirects the root to the default tab`() {
+        mockMvc.perform(get("/"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/schd/day"))
+    }
+
+    @Test
+    fun `redirects an unknown tab to the default tab`() {
+        mockMvc.perform(get("/schd/nope"))
+            .andExpect(status().is3xxRedirection)
+            .andExpect(redirectedUrl("/schd/day"))
     }
 
     @Test
@@ -70,7 +86,7 @@ class ShellControllerIntegrationTest {
 
         // Thymeleaf 의 JS 인라이닝은 한글을 \uXXXX 로 이스케이프하므로 이름 대신
         // ASCII로 남는 필드로 확인한다.
-        mockMvc.perform(get("/"))
+        mockMvc.perform(get("/schd/day"))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("\"latitude\":35.7148")))
             .andExpect(content().string(containsString("\"startMinutes\":600")))
@@ -80,29 +96,22 @@ class ShellControllerIntegrationTest {
 
     @Test
     fun `renders with a null trip when no trip is set`() {
-        mockMvc.perform(get("/"))
+        mockMvc.perform(get("/schd/day"))
             .andExpect(status().isOk)
             .andExpect(content().string(containsString("var TRIP = null")))
     }
 
     @Test
-    fun `redirects the old sources path to the shell`() {
-        mockMvc.perform(get("/sources"))
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/"))
-    }
-
-    @Test
-    fun `redirects the old plan path to the shell`() {
-        mockMvc.perform(get("/plan"))
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/"))
-    }
-
-    @Test
-    fun `redirects the old day path to the shell`() {
-        mockMvc.perform(get("/day"))
-            .andExpect(status().is3xxRedirection)
-            .andExpect(redirectedUrl("/"))
+    fun `redirects the old prefixless paths to their new ones`() {
+        mapOf(
+            "/sources" to "/schd/add",
+            "/add" to "/schd/add",
+            "/plan" to "/schd/plan",
+            "/day" to "/schd/day"
+        ).forEach { (old, new) ->
+            mockMvc.perform(get(old))
+                .andExpect(status().is3xxRedirection)
+                .andExpect(redirectedUrl(new))
+        }
     }
 }

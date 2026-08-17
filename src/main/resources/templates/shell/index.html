@@ -28,6 +28,7 @@
                 <button type="button" class="chip chip--on" data-filter="all">전체</button>
                 <button type="button" class="chip" data-filter="RESTAURANT">🍴 음식점</button>
                 <button type="button" class="chip" data-filter="ATTRACTION">📍 관광지</button>
+                <button type="button" class="chip" data-filter="WAYPOINT">🚏 경유지</button>
                 <button type="button" class="chip" data-filter="unassigned">미배정</button>
             </div>
 
@@ -98,6 +99,7 @@
             <legend>장소 종류</legend>
             <label class="inline"><input type="radio" name="placeType" value="RESTAURANT" required> 🍴 음식점</label>
             <label class="inline"><input type="radio" name="placeType" value="ATTRACTION"> 📍 관광지</label>
+            <label class="inline"><input type="radio" name="placeType" value="WAYPOINT"> 🚏 경유지</label>
         </fieldset>
 
         <label>예상 소요 시간</label>
@@ -126,9 +128,9 @@
 
 <footer>
     <nav>
-        <a href="#add" data-tab="add"><span aria-hidden="true">📍</span><span>장소 추가</span></a>
-        <a href="#plan" data-tab="plan"><span aria-hidden="true">🗓️</span><span>동선 변경</span></a>
-        <a href="#day" data-tab="day"><span aria-hidden="true">🧭</span><span>계획 보기</span></a>
+        <a th:href="@{/schd/add}" data-tab="add"><span aria-hidden="true">📍</span><span>장소 추가</span></a>
+        <a th:href="@{/schd/plan}" data-tab="plan"><span aria-hidden="true">🗓️</span><span>동선 변경</span></a>
+        <a th:href="@{/schd/day}" data-tab="day"><span aria-hidden="true">🧭</span><span>계획 보기</span></a>
     </nav>
 </footer>
 
@@ -140,6 +142,7 @@
     /*]]>*/
 </script>
 
+<script th:src="@{/js/place-types.js}"></script>
 <script th:src="@{/js/timegrid.js}"></script>
 <script th:src="@{/js/dragdrop.js}"></script>
 <script th:src="@{/js/api.js}"></script>

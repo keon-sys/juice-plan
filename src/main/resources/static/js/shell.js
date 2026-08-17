@@ -3,6 +3,7 @@
     const HANDLE_PEEK = 52;   // 시트를 끝까지 내렸을 때 남겨둘 손잡이 높이
     const TABS = ['add', 'plan', 'day'];
     const DEFAULT_TAB = 'day';
+    const BASE = '/schd';      // ShellController 의 @GetMapping("/schd/{tab}") 과 같아야 한다
 
     const sheetArea = document.getElementById('sheet-area');
     const handle = document.getElementById('map-handle');
@@ -89,10 +90,13 @@
     // 주소창이 접히거나 화면이 돌아가면 1단계 위치와 지도 여백이 달라진다
     window.addEventListener('resize', () => setStep(step));
 
-    // ---- 해시 라우팅 ----
-    function tabFromHash() {
-        const hash = window.location.hash.replace('#', '');
-        return TABS.includes(hash) ? hash : DEFAULT_TAB;
+    // ---- 경로 라우팅 ----
+    // 주소는 /schd/add · /schd/plan · /schd/day 로 진짜 경로를 쓰지만, 탭을 옮길 때
+    // 서버로 다시 가면 구글맵이 통째로 재생성된다. 그래서 pushState 로 주소만 바꾸고
+    // 화면은 여기서 갈아끼운다. 새로고침·북마크로 들어올 때만 서버가 같은 셸을 돌려준다.
+    function tabFromPath() {
+        const last = window.location.pathname.replace(/\/+$/, '').split('/').pop();
+        return TABS.includes(last) ? last : DEFAULT_TAB;
     }
 
     function show(tab) {
@@ -109,13 +113,38 @@
 
         current = effective;
         VIEWS[effective].show();
+        return effective;
+    }
+
+    function pathOf(tab) {
+        return BASE + '/' + tab;
     }
 
     function route() {
-        show(tabFromHash());
+        const effective = show(tabFromPath());
+        // 여행 기간이 없어 add 로 되돌린 경우처럼 주소와 화면이 어긋나면 맞춰준다.
+        // 사용자가 고른 적 없는 이동이므로 방문 기록은 남기지 않는다.
+        if (window.location.pathname !== pathOf(effective)) {
+            history.replaceState({}, '', pathOf(effective));
+        }
     }
 
-    window.addEventListener('hashchange', route);
+    function navigate(tab) {
+        if (window.location.pathname === pathOf(tab)) return;
+        history.pushState({}, '', pathOf(tab));
+        route();
+    }
+
+    // 뒤로/앞으로 가기
+    window.addEventListener('popstate', route);
+
+    // 링크는 진짜 주소를 그대로 두고(새 탭·복사가 되도록) 클릭만 가로챈다
+    document.querySelectorAll('footer nav a[data-tab]').forEach((a) => {
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            navigate(a.dataset.tab);
+        });
+    });
 
     // ---- 뷰가 데이터를 바꿨을 때 현재 뷰를 다시 그리게 하는 통로 ----
     window.Shell = {

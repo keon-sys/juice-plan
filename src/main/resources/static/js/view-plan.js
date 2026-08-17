@@ -39,7 +39,7 @@ window.ViewPlan = (function () {
         card.className = 'card source-card' + (outside ? ' source-card--outside' : '');
         card.dataset.id = String(s.id);
         card.innerHTML =
-            `<div>${s.placeType === 'RESTAURANT' ? '🍴' : '📍'} ${escapeHtml(s.name)}</div>` +
+            `<div>${window.PlaceTypes.emoji(s.placeType)} ${escapeHtml(s.name)}</div>` +
             `<div class="muted">${s.durationMinutes}분${s.reservationRequired ? ' · 🔔' : ''}</div>`;
         attachDrag(card, s.id);
         return card;
@@ -96,8 +96,7 @@ window.ViewPlan = (function () {
         laid.forEach((b) => {
             const s = window.SOURCES.find((x) => x.id === b.id);
             const el = document.createElement('div');
-            el.className = 'tt-block ' +
-                (s.placeType === 'RESTAURANT' ? 'tt-block--food' : 'tt-block--attraction') +
+            el.className = 'tt-block ' + window.PlaceTypes.blockClass(s.placeType) +
                 (s.reservationRequired ? ' tt-block--reserved' : '');
             el.dataset.id = String(s.id);
 

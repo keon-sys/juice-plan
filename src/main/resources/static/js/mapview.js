@@ -26,7 +26,7 @@ window.MapView = (function () {
     }
 
     function colorOf(source) {
-        return token(source.placeType === 'RESTAURANT' ? '--food' : '--attraction');
+        return token(window.PlaceTypes.colorToken(source.placeType));
     }
 
     function circle(fill, stroke, strokeWeight, scale) {

@@ -78,6 +78,18 @@ class SourceControllerIntegrationTest {
     }
 
     @Test
+    fun `stores a waypoint and returns it`() {
+        mockMvc.perform(
+            post("/api/sources").contentType(MediaType.APPLICATION_JSON)
+                .content(body(name = "환승역", placeType = "WAYPOINT"))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.placeType").value("WAYPOINT"))
+
+        assertEquals(PlaceType.WAYPOINT, sourceRepository.findAll().single().placeType)
+    }
+
+    @Test
     fun `rejects a reservation without a deadline`() {
         mockMvc.perform(
             post("/api/sources").contentType(MediaType.APPLICATION_JSON)

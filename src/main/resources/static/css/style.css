@@ -9,6 +9,7 @@
   --primary: #4F6BED;
   --food: #FF7A59;
   --attraction: #2BB0A0;
+  --waypoint: #9B6DD6;
   --text: #1B1F27;
   --muted: #6B7280;
   --border: #E5E7EB;
@@ -19,7 +20,7 @@
   --tabbar-h: 56px;
   --map-h: 200px;        /* 중간 단에서 드러나는 지도 띠의 높이 — shell.js의 MAP_PEEK과 같아야 한다 */
   --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
-  --on-accent: #FFFFFF;  /* primary/food/attraction 배경 위의 글자색 */
+  --on-accent: #FFFFFF;  /* primary/장소 종류 색 배경 위의 글자색 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +30,7 @@
     --primary: #7C90F5;
     --food: #FF9273;
     --attraction: #48C7B7;
+    --waypoint: #B794E8;
     --text: #ECEEF2;
     --muted: #9AA1AD;
     --border: #2E323A;
@@ -121,6 +123,7 @@ h3 { font-size: 16px; margin: 0 0 12px; }
 }
 .badge--food { background: var(--food); }
 .badge--attraction { background: var(--attraction); }
+.badge--waypoint { background: var(--waypoint); }
 .badge--reservation {
   background: transparent;
   color: var(--muted);
@@ -129,6 +132,7 @@ h3 { font-size: 16px; margin: 0 0 12px; }
 }
 
 .chip {
+  flex: 0 0 auto;   /* 칩이 늘면 줄에 안 맞는다. 눌러 담지 말고 가로로 넘겨 스크롤한다 */
   min-height: 44px;
   padding: 0 14px;
   border-radius: 22px;
@@ -413,6 +417,7 @@ legend { font-size: 14px; color: var(--muted); padding: 0 6px; }
 }
 .tt-block--food { background: var(--food); }
 .tt-block--attraction { background: var(--attraction); }
+.tt-block--waypoint { background: var(--waypoint); }
 .tt-block--reserved { border-left-color: var(--on-accent); }
 
 #drop-preview {

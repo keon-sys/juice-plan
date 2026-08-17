@@ -70,8 +70,7 @@ window.ViewDay = (function () {
         laid.forEach((b) => {
             const s = window.SOURCES.find((x) => x.id === b.id);
             const el = document.createElement('div');
-            el.className = 'tt-block ' +
-                (s.placeType === 'RESTAURANT' ? 'tt-block--food' : 'tt-block--attraction') +
+            el.className = 'tt-block ' + window.PlaceTypes.blockClass(s.placeType) +
                 (s.reservationRequired ? ' tt-block--reserved' : '');
 
             const top = TG.topFor(b.startMinutes);
@@ -85,7 +84,7 @@ window.ViewDay = (function () {
             const endLabel = end > TG.DAY_END ? '28:00+' : TG.formatSlot(end);
             el.innerHTML =
                 `<div><strong>${orderOf[s.id]}.</strong> ${TG.formatSlot(b.startMinutes)}–${endLabel}</div>` +
-                `<div>${s.placeType === 'RESTAURANT' ? '🍴' : '📍'} ${escapeHtml(s.name)}</div>` +
+                `<div>${window.PlaceTypes.emoji(s.placeType)} ${escapeHtml(s.name)}</div>` +
                 (s.reservationRequired ? `<div>🔔 ${s.reservationDeadline || ''}</div>` : '');
 
             el.addEventListener('click', () => window.MapView.focus(s));

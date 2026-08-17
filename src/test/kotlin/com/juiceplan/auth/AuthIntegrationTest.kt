@@ -150,6 +150,13 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/password").param("password", PASSWORD))
             .andExpect(cookie().secure(AUTH_COOKIE_NAME, false))
     }
+
+    @Test
+    fun `marks the cookie secure when a proxy terminated https`() {
+        // 터널 뒤에서는 오리진이 http 로 받는다. X-Forwarded-Proto 를 봐야 Secure 가 붙는다.
+        mockMvc.perform(post("/password").param("password", PASSWORD).header("X-Forwarded-Proto", "https"))
+            .andExpect(cookie().secure(AUTH_COOKIE_NAME, true))
+    }
 }
 
 @SpringBootTest

@@ -1,5 +1,8 @@
 server:
   port: 8080
+  # Cloudflare 터널 뒤에서는 엣지만 https 이고 오리진은 http 로 받는다.
+  # 이 앱은 터널이나 리버스 프록시 뒤에서만 외부에 노출된다는 전제다.
+  forward-headers-strategy: framework
 
 spring:
   datasource:
@@ -14,5 +17,4 @@ spring:
 
 app:
   google-maps-api-key: ${GOOGLE_MAPS_API_KEY:}
-  # 비어 있으면 인증이 꺼지고 모든 요청이 그대로 통과한다
   password: ${APP_PASSWORD:}

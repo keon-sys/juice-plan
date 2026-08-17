@@ -126,13 +126,7 @@
     </form>
 </div>
 
-<footer>
-    <nav>
-        <a th:href="@{/schd/add}" data-tab="add"><span aria-hidden="true">📍</span><span>장소 추가</span></a>
-        <a th:href="@{/schd/plan}" data-tab="plan"><span aria-hidden="true">🗓️</span><span>동선 변경</span></a>
-        <a th:href="@{/schd/day}" data-tab="day"><span aria-hidden="true">🧭</span><span>계획 보기</span></a>
-    </nav>
-</footer>
+<footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
 
 <script th:inline="javascript">
     /*<![CDATA[*/

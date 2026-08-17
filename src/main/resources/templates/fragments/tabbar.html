@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<body>
+<!--/* 세 섹션이 함께 쓰는 하단 탭바. 가운데는 지금 섹션의 탭, 양 끝은 이웃 섹션으로 가는 화살표다.
+
+       화살표에는 data-tab 이 없다. shell.js·budget.js 가 클릭을 가로채는 선택자가
+       footer nav a[data-tab] 이라, 화살표가 거기 걸리면 페이지를 옮기지 못하고 죽는다.
+
+       이웃이 없는 끝 섹션은 <a> 대신 <span> 을 그린다. 자리는 남겨야 탭 위치가
+       섹션마다 좌우로 흔들리지 않는다. */-->
+<footer th:fragment="tabbar">
+    <nav>
+        <a class="nav-arrow" th:if="${prevPath}" th:href="@{${prevPath}}" aria-label="이전 화면">‹</a>
+        <span class="nav-arrow nav-arrow--off" th:unless="${prevPath}" aria-hidden="true">‹</span>
+
+        <a th:each="t : ${section.tabs}"
+           th:href="@{'/' + ${section.id} + '/' + ${t.id}}"
+           th:attr="data-tab=${t.id}"
+           th:classappend="${t.id == activeTab} ? 'active' : ''">
+            <span aria-hidden="true" th:text="${t.icon}"></span><span th:text="${t.label}"></span>
+        </a>
+
+        <a class="nav-arrow" th:if="${nextPath}" th:href="@{${nextPath}}" aria-label="다음 화면">›</a>
+        <span class="nav-arrow nav-arrow--off" th:unless="${nextPath}" aria-hidden="true">›</span>
+    </nav>
+</footer>
+</body>
+</html>

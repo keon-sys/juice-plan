@@ -495,6 +495,27 @@ footer nav a {
 }
 footer nav a.active { color: var(--primary); font-weight: 600; }
 
+/* 양 끝 화살표는 이웃 섹션으로 간다. footer nav a 의 flex:1 을 그대로 두면
+   화살표가 탭만큼 넓어져 탭 이름이 눌린다. */
+.nav-arrow {
+  flex: 0 0 32px;
+  display: flex; align-items: center; justify-content: center;
+  min-height: var(--tabbar-h);
+  color: var(--muted); font-size: 22px; line-height: 1;
+  text-decoration: none;
+}
+/* 끝 섹션에는 갈 곳이 없다. <span> 이라 눌리지 않지만 자리는 남겨야
+   탭 위치가 섹션을 옮길 때마다 좌우로 흔들리지 않는다. */
+.nav-arrow--off { opacity: .25; }
+
+/* ---- 지도가 없는 섹션(예산·체크리스트)의 본문 ---- */
+/* 셸은 지도 위에 시트를 덮지만 여기는 덮을 게 없다. 탭바 높이만 남기고 화면을 채운다. */
+.section-body {
+  position: fixed; inset: 0;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column;
+}
+
 /* ---- 로그인 ---- */
 /* body 가 100dvh/overflow:hidden 이므로 그 안에서 가운데로만 잡으면 된다 */
 .auth-page {

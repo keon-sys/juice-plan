@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport-fit=cover 가 있어야 env(safe-area-inset-*) 가 동작한다 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>juice-plan</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+
+<div class="section-body">
+    <section id="view-summary" class="view" hidden></section>
+    <section id="view-list" class="view" hidden></section>
+</div>
+
+<footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
+
+<script th:src="@{/js/budget.js}"></script>
+</body>
+</html>

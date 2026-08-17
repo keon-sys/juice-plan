@@ -16,6 +16,17 @@
 
 <footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
 
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    var BUDGET_ITEMS = /*[[${items}]]*/ [];
+    var BUDGET_SUMMARY = /*[[${summary}]]*/ {};
+    /*]]>*/
+</script>
+
+<script th:src="@{/js/budget-types.js}"></script>
+<script th:src="@{/js/api.js}"></script>
+<script th:src="@{/js/budget-summary.js}"></script>
+<script th:src="@{/js/budget-list.js}"></script>
 <script th:src="@{/js/budget.js}"></script>
 </body>
 </html>

@@ -32,5 +32,7 @@ window.Api = (function () {
         removeSchedule: (id) => send('DELETE', `/api/schedule/${id}`),
         saveDayNote: (date, memo) => send('POST', `/api/day-notes/${date}`, { memo }),
         parseLink: (url) => send('POST', '/api/sources/parse-link', { url }),
+        budgetSummary: () => send('GET', '/api/budget/summary'),
+        saveBudgetRate: (ratePer100Jpy) => send('PUT', '/api/budget/rate', { ratePer100Jpy }),
     };
 })();

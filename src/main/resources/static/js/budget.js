@@ -7,6 +7,11 @@
 
     let current = null;
 
+    const VIEWS = {
+        summary: window.ViewSummary,
+        list: window.ViewList,
+    };
+
     function tabFromPath() {
         const last = window.location.pathname.replace(/\/+$/, '').split('/').pop();
         return TABS.includes(last) ? last : DEFAULT_TAB;
@@ -24,6 +29,7 @@
             a.classList.toggle('active', a.dataset.tab === tab);
         });
         current = tab;
+        VIEWS[tab].show();
     }
 
     function route() {
@@ -50,6 +56,15 @@
             navigate(a.dataset.tab);
         });
     });
+
+    // 데이터가 바뀌었을 때 지금 탭을 다시 그리게 하는 통로
+    window.BudgetSection = {
+        refresh: () => { if (current) VIEWS[current].show(); },
+        currentTab: () => current,
+    };
+
+    // 각 뷰의 한 번뿐인 초기화(이벤트 바인딩)를 먼저 돌린다
+    Object.values(VIEWS).forEach((v) => v.init());
 
     route();
 })();

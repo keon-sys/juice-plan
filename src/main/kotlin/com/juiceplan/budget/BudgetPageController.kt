@@ -15,7 +15,7 @@ private const val SECTION = "budget"
  * 셸처럼 조심할 건 없지만, 탭을 옮길 때 서버로 다시 갈 이유도 없다.
  */
 @Controller
-class BudgetPageController {
+class BudgetPageController(private val budgetService: BudgetService) {
 
     @GetMapping("/budget")
     fun root(): RedirectView = RedirectView(Nav.section(SECTION).defaultPath())
@@ -25,6 +25,9 @@ class BudgetPageController {
         val section = Nav.section(SECTION)
         if (!section.has(tab)) return RedirectView(section.defaultPath())
 
+        // 첫 화면에서 API 를 한 번 더 부르지 않도록 셸(SOURCES)과 같은 방식으로 실어 보낸다
+        model.addAttribute("items", budgetService.list())
+        model.addAttribute("summary", budgetService.summary())
         model.addNav(SECTION, tab)
         return "budget/index"
     }

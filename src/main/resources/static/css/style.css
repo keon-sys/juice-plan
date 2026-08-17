@@ -21,6 +21,15 @@
   --map-h: 200px;        /* 중간 단에서 드러나는 지도 띠의 높이 — shell.js의 MAP_PEEK과 같아야 한다 */
   --shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 2px rgb(0 0 0 / .04);
   --on-accent: #FFFFFF;  /* primary/장소 종류 색 배경 위의 글자색 */
+
+  /* 예산 카테고리 7색 — 도넛과 그룹 머리글에 쓴다 */
+  --cat-flight: #4F6BED;
+  --cat-hotel: #9B6DD6;
+  --cat-food: #FF7A59;
+  --cat-transit: #2BB0A0;
+  --cat-activity: #E8B33C;
+  --cat-shopping: #E0619B;
+  --cat-etc: #7B8794;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -37,6 +46,14 @@
     --danger: #F87171;
     --shadow: 0 1px 3px rgb(0 0 0 / .4);
     --on-accent: #10131A;
+
+    --cat-flight: #7C90F5;
+    --cat-hotel: #B794E8;
+    --cat-food: #FF9273;
+    --cat-transit: #48C7B7;
+    --cat-activity: #F0C662;
+    --cat-shopping: #F084B4;
+    --cat-etc: #9AA1AD;
   }
 }
 
@@ -125,6 +142,16 @@ h3 { font-size: 16px; margin: 0 0 12px; }
 .badge--attraction { background: var(--attraction); }
 .badge--waypoint { background: var(--waypoint); }
 .badge--reservation {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+/* 정산 상태 */
+.badge--settle-done { background: var(--attraction); }
+.badge--settle-na { background: var(--muted); }
+.badge--settle-pending {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--border);
@@ -515,6 +542,44 @@ footer nav a.active { color: var(--primary); font-weight: 600; }
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   display: flex; flex-direction: column;
 }
+
+/* ============================================================
+   예산
+   ============================================================ */
+.budget-rate { display: flex; flex-direction: column; }
+.budget-rate label { margin-top: 0; }
+.budget-rate__row { display: flex; align-items: center; gap: 8px; }
+/* 환율은 네 자리면 충분하다. 전체 폭으로 늘리면 입력칸만 덩그러니 커 보인다. */
+.budget-rate__row input { width: 100px; }
+
+.budget-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.budget-table th,
+.budget-table td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  text-align: left; vertical-align: top;
+  font-weight: 400;
+}
+.budget-table thead th { color: var(--muted); font-size: 12px; }
+/* 숫자는 오른쪽으로 맞춰야 자릿수를 눈으로 비교할 수 있다 */
+.budget-table .num { text-align: right; white-space: nowrap; }
+.budget-table tfoot th,
+.budget-table tfoot td { font-weight: 700; border-bottom: 0; }
+.budget-converted { margin: 12px 0 0; }
+
+.budget-group__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap;
+  font-size: 15px;
+  margin: 16px 16px 4px;
+}
+.budget-card__head { margin-bottom: 4px; }
+.budget-card__meta { display: flex; align-items: center; gap: 8px; }
+.budget-card__amount {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-top: 6px;
+}
+.budget-card__memo { margin: 6px 0 0; white-space: pre-wrap; }
 
 /* ---- 로그인 ---- */
 /* body 가 100dvh/overflow:hidden 이므로 그 안에서 가운데로만 잡으면 된다 */

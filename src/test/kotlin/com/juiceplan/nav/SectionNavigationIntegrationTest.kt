@@ -3,6 +3,7 @@ package com.juiceplan.nav
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -20,6 +21,23 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 class SectionNavigationIntegrationTest {
 
     @Autowired lateinit var mockMvc: MockMvc
+    @Autowired lateinit var budgetService: com.juiceplan.budget.BudgetService
+
+    // 테스트용 H2 는 DB_CLOSE_DELAY=-1 이라 같은 스프링 컨텍스트를 쓰는 다른 테스트 클래스와
+    // DB 를 나눠 쓴다. 환율을 바꾸는 테스트가 먼저 돌았을 수 있으므로 되돌려 놓는다.
+    @BeforeEach
+    fun resetRate() {
+        budgetService.saveRate(900)
+    }
+
+    @Test
+    fun `the budget page embeds its items and summary for the client`() {
+        // Thymeleaf 의 JS 인라이닝은 한글을 \uXXXX 로 이스케이프하므로 ASCII 로 남는 필드만 본다
+        mockMvc.perform(get("/budget/summary"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("var BUDGET_ITEMS =")))
+            .andExpect(content().string(containsString("\"ratePer100Jpy\":900")))
+    }
 
     @Test
     fun `each section root redirects to its default tab`() {

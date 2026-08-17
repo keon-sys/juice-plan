@@ -3,6 +3,7 @@ package com.juiceplan.nav
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -106,5 +107,29 @@ class SectionNavigationIntegrationTest {
         val html = mockMvc.perform(get("/budget/summary")).andReturn().response.contentAsString
 
         assertEquals(2, Regex("data-tab=").findAll(html).count())
+    }
+
+    @Test
+    fun `every check tab is reachable`() {
+        listOf("/check/shopping", "/check/packing", "/check/todo").forEach { path ->
+            mockMvc.perform(get(path)).andExpect(status().isOk)
+        }
+    }
+
+    @Test
+    fun `the check page ships all three tab views so the client can swap them`() {
+        mockMvc.perform(get("/check/todo"))
+            .andExpect(status().isOk)
+            .andExpect(content().string(containsString("id=\"view-shopping\"")))
+            .andExpect(content().string(containsString("id=\"view-packing\"")))
+            .andExpect(content().string(containsString("id=\"view-todo\"")))
+    }
+
+    @Test
+    fun `the check tab bar shows three tabs and no forward arrow`() {
+        val html = mockMvc.perform(get("/check/shopping")).andReturn().response.contentAsString
+
+        assertEquals(3, Regex("data-tab=").findAll(html).count())
+        assertTrue(html.contains("nav-arrow--off"))
     }
 }

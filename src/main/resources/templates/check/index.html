@@ -9,11 +9,13 @@
 <body>
 
 <div class="section-body">
-    <section class="view">
-        <p class="card muted">쇼핑 목록은 아직 준비 중입니다.</p>
-    </section>
+    <section id="view-shopping" class="view" hidden></section>
+    <section id="view-packing" class="view" hidden></section>
+    <section id="view-todo" class="view" hidden></section>
 </div>
 
 <footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
+
+<script th:src="@{/js/check.js}"></script>
 </body>
 </html>

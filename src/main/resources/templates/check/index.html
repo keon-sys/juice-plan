@@ -16,6 +16,13 @@
 
 <footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
 
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    var CHECK_ITEMS = /*[[${items}]]*/ [];
+    /*]]>*/
+</script>
+
+<script th:src="@{/js/api.js}"></script>
 <script th:src="@{/js/check.js}"></script>
 </body>
 </html>

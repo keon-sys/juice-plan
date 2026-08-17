@@ -1,5 +1,5 @@
 (function () {
-    const MID_RATIO = .5;     // 2단계에서 시트가 차지하는 화면 비율 — style.css 의 --sheet-mid 와 같아야 한다
+    const MID_RATIO = .4;     // 2단계에서 시트가 차지하는 화면 비율 — style.css 의 --sheet-mid 와 같아야 한다
     const SHEET_PEEK = 88;    // 1단계에서 남겨둘 높이 — 손잡이(28) + 날짜 스트립(56) + 여백.
                               // 날짜만 고를 수 있으면 되고 타임테이블은 보이지 않아야 한다.
     const TABS = ['add', 'plan', 'day'];

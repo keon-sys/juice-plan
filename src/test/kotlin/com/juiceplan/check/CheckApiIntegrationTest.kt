@@ -40,6 +40,8 @@ class CheckApiIntegrationTest {
             .andExpect(jsonPath("$.id").isNumber)
             .andExpect(jsonPath("$.list").value("PACKING"))
             .andExpect(jsonPath("$.checked").value(false))
+            .andExpect(jsonPath("$.name").value("여권"))
+            .andExpect(jsonPath("$.memo").value("유효기간 확인"))
     }
 
     @Test

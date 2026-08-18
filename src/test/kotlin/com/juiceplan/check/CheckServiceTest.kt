@@ -100,8 +100,8 @@ class CheckServiceTest {
     @Test
     fun `list keeps unchecked items first and insertion order within each group`() {
         val first = checkService.create(input(name = "첫째"))
-        val second = checkService.create(input(name = "둘째"))
-        val third = checkService.create(input(name = "셋째"))
+        checkService.create(input(name = "둘째"))
+        checkService.create(input(name = "셋째"))
 
         checkService.setChecked(first.id, true)
 

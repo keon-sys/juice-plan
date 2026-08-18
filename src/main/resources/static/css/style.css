@@ -607,10 +607,18 @@ footer nav a.active { color: var(--primary); font-weight: 600; }
 /* ============================================================
    체크리스트
    ============================================================ */
-.check-add { display: flex; gap: 8px; padding: 8px 16px 0; }
+/* 목록이 길어져도 입력 한 줄은 늘 손 닿는 자리에 있어야 한다.
+   #view-add 가 쓰는 것과 같은 방식으로 뷰를 고정하고 목록만 스크롤시킨다. */
+#view-shopping, #view-packing, #view-todo { overflow: hidden; }
+.check-add { display: flex; gap: 8px; padding: 8px 16px 0; flex: 0 0 auto; }
 .check-add__input { flex: 1 1 auto; }
 /* 버튼이 늘어나면 입력칸이 좁아진다. 글자 폭만 차지하게 둔다. */
 .check-add__btn { flex: 0 0 auto; }
+
+.check-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+}
 
 .check-progress { margin: 10px 16px 2px; }
 

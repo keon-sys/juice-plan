@@ -1,5 +1,6 @@
 package com.juiceplan.nav
 
+import com.juiceplan.check.CheckList
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -55,5 +56,14 @@ class NavTest {
     fun `an unknown section id is a programming error`() {
         assertThrows(IllegalArgumentException::class.java) { Nav.section("nope") }
         assertThrows(IllegalArgumentException::class.java) { Nav.nextPath("nope") }
+    }
+
+    @Test
+    fun `check tabs and the CheckList enum stay in step`() {
+        // 목록을 하나 더할 때 다섯 군데를 함께 고쳐야 한다. 서버 쪽 둘만이라도 여기서 붙잡는다.
+        assertEquals(
+            CheckList.values().map { it.name },
+            Nav.section("check").tabs.map { it.id.uppercase() }
+        )
     }
 }

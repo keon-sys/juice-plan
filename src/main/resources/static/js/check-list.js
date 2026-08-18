@@ -92,6 +92,61 @@ window.ViewCheck = (function () {
         }
     }
 
+    let editingId = null;
+
+    const sheet = () => document.getElementById('checkSheet');
+    const backdrop = () => document.getElementById('checkBackdrop');
+
+    function openSheet(item) {
+        editingId = item.id;
+        document.getElementById('checkName').value = item.name;
+        document.getElementById('checkMemo').value = item.memo || '';
+        document.getElementById('checkError').hidden = true;
+
+        sheet().classList.add('sheet--open');
+        backdrop().classList.add('sheet--open');
+    }
+
+    function closeSheet() {
+        sheet().classList.remove('sheet--open');
+        backdrop().classList.remove('sheet--open');
+        editingId = null;
+    }
+
+    async function submit(e) {
+        e.preventDefault();
+        const errorEl = document.getElementById('checkError');
+        errorEl.hidden = true;
+
+        try {
+            const updated = await window.Api.updateCheckItem(editingId, {
+                name: document.getElementById('checkName').value,
+                memo: document.getElementById('checkMemo').value || null,
+            });
+            const i = window.CHECK_ITEMS.findIndex((it) => it.id === updated.id);
+            window.CHECK_ITEMS[i] = updated;
+            closeSheet();
+            window.CheckSection.refresh();
+        } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+        }
+    }
+
+    async function remove() {
+        const item = window.CHECK_ITEMS.find((it) => it.id === editingId);
+        if (!confirm(`'${item.name}'을(를) 삭제하시겠습니까?`)) return;
+
+        try {
+            await window.Api.deleteCheckItem(editingId);
+            window.CHECK_ITEMS = window.CHECK_ITEMS.filter((it) => it.id !== item.id);
+            closeSheet();
+            window.CheckSection.refresh();
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
     function init() {
         // 목록은 매번 새로 그려지므로 이벤트는 바깥 상자에 한 번만 건다
         const host = document.querySelector('.section-body');
@@ -105,6 +160,18 @@ window.ViewCheck = (function () {
         host.addEventListener('change', (e) => {
             if (e.target.classList.contains('check-row__box')) toggle(e.target);
         });
+
+        host.addEventListener('click', (e) => {
+            const body = e.target.closest('.check-row__body');
+            if (!body) return;
+            const id = Number(body.closest('.check-row').dataset.id);
+            openSheet(window.CHECK_ITEMS.find((it) => it.id === id));
+        });
+
+        document.getElementById('checkForm').addEventListener('submit', submit);
+        document.getElementById('checkDelete').addEventListener('click', remove);
+        document.getElementById('checkSheetClose').addEventListener('click', closeSheet);
+        document.getElementById('checkBackdrop').addEventListener('click', closeSheet);
     }
 
     return { init, show };

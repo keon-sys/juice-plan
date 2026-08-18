@@ -14,6 +14,28 @@
     <section id="view-todo" class="view" hidden></section>
 </div>
 
+<!-- ── 항목 수정 시트 ── -->
+<div class="sheet__backdrop" id="checkBackdrop"></div>
+<div class="sheet" id="checkSheet">
+    <h3>항목 수정</h3>
+
+    <!-- 이름 규칙은 서버가 갖는다. 브라우저 기본 검증을 켜두면 빈 이름으로 저장했을 때
+         submit 자체가 막혀 서버의 400 메시지를 시트에 띄울 기회가 없어진다. -->
+    <form id="checkForm" novalidate>
+        <label for="checkName">이름</label>
+        <input type="text" id="checkName" name="name">
+
+        <label for="checkMemo">메모</label>
+        <textarea id="checkMemo" name="memo" rows="2" placeholder="예: 회사 사람들 것까지"></textarea>
+
+        <p id="checkError" class="error" hidden style="margin:8px 0 0;"></p>
+
+        <button type="submit" class="btn btn--primary btn--block" style="margin-top:16px;">저장</button>
+        <button type="button" class="btn btn--danger btn--block" id="checkDelete" style="margin-top:8px;">삭제</button>
+        <button type="button" class="btn btn--ghost btn--block" id="checkSheetClose" style="margin-top:8px;">닫기</button>
+    </form>
+</div>
+
 <footer th:replace="~{fragments/tabbar :: tabbar}"></footer>
 
 <script th:inline="javascript">

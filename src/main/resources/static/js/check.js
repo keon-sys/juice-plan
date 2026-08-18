@@ -24,6 +24,7 @@
             a.classList.toggle('active', a.dataset.tab === tab);
         });
         current = tab;
+        window.ViewCheck.show(tab);
     }
 
     function route() {
@@ -50,6 +51,14 @@
             navigate(a.dataset.tab);
         });
     });
+
+    // 데이터가 바뀌었을 때 지금 탭을 다시 그리게 하는 통로
+    window.CheckSection = {
+        refresh: () => { if (current) window.ViewCheck.show(current); },
+        currentTab: () => current,
+    };
+
+    window.ViewCheck.init();
 
     route();
 })();

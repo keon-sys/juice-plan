@@ -37,5 +37,9 @@ window.Api = (function () {
         createBudgetItem: (payload) => send('POST', '/api/budget/items', payload),
         updateBudgetItem: (id, payload) => send('PUT', `/api/budget/items/${id}`, payload),
         deleteBudgetItem: (id) => send('DELETE', `/api/budget/items/${id}`),
+        createCheckItem: (payload) => send('POST', '/api/check/items', payload),
+        updateCheckItem: (id, payload) => send('PUT', `/api/check/items/${id}`, payload),
+        setCheckItemChecked: (id, checked) => send('PUT', `/api/check/items/${id}/checked`, { checked }),
+        deleteCheckItem: (id) => send('DELETE', `/api/check/items/${id}`),
     };
 })();

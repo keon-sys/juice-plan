@@ -47,6 +47,8 @@ object Nav {
             id = "check", defaultTab = "shopping",
             tabs = listOf(
                 NavTab("shopping", "🛒", "쇼핑 목록"),
+                NavTab("packing", "🎒", "준비물"),
+                NavTab("todo", "✅", "할일"),
             )
         ),
     )

@@ -10,9 +10,12 @@ import org.springframework.web.servlet.view.RedirectView
 
 private const val SECTION = "check"
 
-/** 아직 내용이 없다. 화살표 이동과 리다이렉트 구조를 먼저 완성해 두려고 자리만 잡는다. */
+/**
+ * 체크리스트 페이지. 세 탭이 같은 페이지를 쓰고 클라이언트가 갈아끼운다.
+ * 세 목록의 항목을 한 번에 실어 보내므로 탭을 옮길 때 서버로 오지 않는다.
+ */
 @Controller
-class CheckPageController {
+class CheckPageController(private val checkService: CheckService) {
 
     @GetMapping("/check")
     fun root(): RedirectView = RedirectView(Nav.section(SECTION).defaultPath())
@@ -22,6 +25,7 @@ class CheckPageController {
         val section = Nav.section(SECTION)
         if (!section.has(tab)) return RedirectView(section.defaultPath())
 
+        model.addAttribute("items", checkService.list())
         model.addNav(SECTION, tab)
         return "check/index"
     }
